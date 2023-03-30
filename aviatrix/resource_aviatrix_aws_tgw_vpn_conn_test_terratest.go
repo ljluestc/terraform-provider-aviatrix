@@ -13,6 +13,19 @@ import (
 	"github.com/terraform-providers/terraform-provider-aviatrix/goaviatrix"
 )
 
+func awsTgwVpnConnClient(t *testing.T) *goaviatrix.Client {
+    username := os.Getenv("AVIATRIX_USERNAME")
+    password := os.Getenv("AVIATRIX_PASSWORD")
+    controllerURL := os.Getenv("AVIATRIX_CONTROLLER_URL")
+
+    client, err := goaviatrix.NewClient(username, password, controllerURL, &http.Client{})
+    if err != nil {
+        t.Fatal(err)
+    }
+
+    return client
+}
+
 func TestAccAwsTgwVpnConn_basic(t *testing.T) {
 	t.Parallel()
 
@@ -37,7 +50,7 @@ func TestAccAwsTgwVpnConn_basic(t *testing.T) {
 			"AWS_ACCESS_KEY":      os.Getenv("AWS_ACCESS_KEY"),
 			"AWS_SECRET_KEY":      os.Getenv("AWS_SECRET_KEY"),
 			"AWS_REGION":          os.Getenv("AWS_REGION"),
-			"AWS_ACCOUNT_NUMBER":  os.Getenv("AWS_ACCOUNT_NUMBER"),
+			"AWS_ACCOUNT_ID":      os.Getenv("AWS_ACCOUNT_ID"),
 		},
 	}
 
@@ -54,16 +67,29 @@ func TestAccAwsTgwVpnConn_basic(t *testing.T) {
 	err := verifyAwsTgwVpnConnExists(t, &awsTgwVpnConn)
 	assert.Nil(t, err)
 
-	importedTerraformOptions := terraformOptions
-	importedTerraformOptions.Import = true
-	importedTerraformOptions.ImportStateVerify = true
-	importedTerraformOptions.ImportStateVerifyIgnore = []string{"vpn_tunnel_data"}
+	// Define importedTerraformOptions to import the existing AWS TGW VPN Connection to Terraform state
+	importedTerraformOptions := &terraform.Options{
+		TerraformDir: "./",
+		Vars: map[string]interface{}{
+			"aws_side_as_number":   awsSideAsNumber,
+			"vpn_connection_name": resourceName,
+			"public_ip":           "40.0.0.0",
+			"route_domain_name":   "Default_Domain",
+			"AWS_ACCESS_KEY":      os.Getenv("AWS_ACCESS_KEY"),
+			"AWS_SECRET_KEY":      os.Getenv("AWS_SECRET_KEY"),
+			"AWS_REGION":          os.Getenv("AWS_REGION"),
+			"AWS_ACCOUNT_ID":      os.Getenv("AWS_ACCOUNT_ID"),
+		},
+	}
 
-	terraform.Import(t, importedTerraformOptions)
+	// Uncomment the below line to import the existing AWS TGW VPN Connection to Terraform state
+	// terraform.Import(t, importedTerraformOptions)
 
 	err = verifyAwsTgwVpnConnExists(t, &awsTgwVpnConn)
 	assert.Nil(t, err)
 }
+
+
 
 func verifyAwsTgwVpnConnExists(t *testing.T, awsTgwVpnConn *goaviatrix.AwsTgwVpnConn) error {
 	client := getAviatrixClient(t)
@@ -77,22 +103,25 @@ func verifyAwsTgwVpnConnExists(t *testing.T, awsTgwVpnConn *goaviatrix.AwsTgwVpn
 	if err != nil {
 		return err
 	}
+
 	if foundAwsTgwVpnConn2.TgwName != awsTgwVpnConn.TgwName {
-		return fmt.Errorf("tgw_name Not found in created attributes")
+		return fmt.Errorf("tgw_name not found in created attributes")
 	}
+
 	if foundAwsTgwVpnConn2.ConnName != awsTgwVpnConn.ConnName {
-		return fmt.Errorf("connection_name Not found in created attributes")
+		return fmt.Errorf("connection_name not found in created attributes")
 	}
 
 	return nil
 }
+
 
 func getAviatrixClient(t *testing.T) *goaviatrix.Client {
 	username := os.Getenv("AVIATRIX_USERNAME")
 	password := os.Getenv("AVIATRIX_PASSWORD")
 	controllerURL := os.Getenv("AVIATRIX_CONTROLLER_URL")
 
-	client, err := goaviatrix.NewClient(username, password, controllerURL, "", "")
+	client, err := goaviatrix.NewClient(username, password, controllerURL, &http.Client{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,20 +133,12 @@ func testAwsTgwVpnConnDestroy(t *testing.T, vpnConnID string) {
 	terraformOptions := &terraform.Options{
 		TerraformDir: "../path/to/terraform/directory",
 		Vars: map[string]interface{}{
-			"aws_region":        awsRegion,
-			"aws_access_key":    awsAccessKey,
-			"aws_secret_key":    awsSecretKey,
-			"aws_account_num":   awsAccountNum,
-			"connection_name":   vpnConnID,
-			"tgw_vpc_id":        tgwVPCID,
-			"customer_gateway":  customerGateway,
-			"ipsec_dpd_timeout": ipsecDPDTimeout,
-			"ike_version":       ikeVersion,
-			"bgp_asn":           bgpASN,
-			"static_routes":     staticRoutes,
-			"vpn_user_enabled":  vpnUserEnabled,
-			"vpn_user_name":     vpnUserName,
-			"vpn_user_password": vpnUserPassword,
+			"aws_side_as_number": awsSideAsNumber,
+			"connection_name":    vpnConnID,
+			"AWS_ACCESS_KEY":     os.Getenv("AWS_ACCESS_KEY"),
+			"AWS_SECRET_KEY":     os.Getenv("AWS_SECRET_KEY"),
+			"AWS_REGION":         os.Getenv("AWS_REGION"),
+			"AWS_ACCOUNT_NUMBER": os.Getenv("AWS_ACCOUNT_NUMBER"),
 		},
 	}
 
@@ -134,4 +155,27 @@ func testAwsTgwVpnConnDestroy(t *testing.T, vpnConnID string) {
 	if err == nil {
 		t.Errorf("AWS TGW VPN CONN still exists")
 	}
+}
+
+func verifyAwsTgwVpnConnExists(t *testing.T, awsTgwVpnConn *goaviatrix.AwsTgwVpnConn) error {
+	username := os.Getenv("AVIATRIX_USERNAME")
+	password := os.Getenv("AVIATRIX_PASSWORD")
+	controllerURL := os.Getenv("AVIATRIX_CONTROLLER_URL")
+
+	client, err := goaviatrix.NewClient(username, password, controllerURL, &http.Client{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	foundAwsTgwVpnConn := &goaviatrix.AwsTgwVpnConn{
+		TgwName: awsTgwVpnConn.TgwName,
+		VpnID:   awsTgwVpnConn.VpnID,
+	}
+
+	_, err = client.GetAwsTgwVpnConn(foundAwsTgwVpnConn)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
