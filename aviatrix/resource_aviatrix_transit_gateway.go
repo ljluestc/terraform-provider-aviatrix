@@ -402,7 +402,6 @@ func resourceAviatrixTransitGateway() *schema.Resource {
 			"bgp_lan_interfaces_count": {
 				Type:         schema.TypeInt,
 				Optional:     true,
-				Default:      1,
 				ValidateFunc: validation.IntAtLeast(1),
 				Description:  "Number of interfaces that will be created for BGP over LAN enabled Azure transit. Applies on HA Transit as well if enabled. Updatable as of provider version 3.0.3+.",
 			},
@@ -442,6 +441,12 @@ func resourceAviatrixTransitGateway() *schema.Resource {
 				Default:     true,
 				Description: "Enable jumbo frame support for transit gateway. Valid values: true or false. Default value: true.",
 			},
+			"enable_gro_gso": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     true,
+				Description: "Specify whether to disable GRO/GSO or not.",
+			},
 			"bgp_hold_time": {
 				Type:         schema.TypeInt,
 				Optional:     true,
@@ -468,14 +473,24 @@ func resourceAviatrixTransitGateway() *schema.Resource {
 				Description: "A map of tags to assign to the transit gateway.",
 			},
 			"enable_spot_instance": {
-				Type:         schema.TypeBool,
-				Optional:     true,
+				Type:     schema.TypeBool,
+				Optional: true,
+				ForceNew: true,
+				ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
+					v := val.(bool)
+					if !v {
+						errs = append(errs, fmt.Errorf("expected %s to true to enable spot instance, got: %v", key, val))
+						return warns, errs
+					}
+					return
+				},
 				Description:  "Enable spot instance. NOT supported for production deployment.",
 				RequiredWith: []string{"spot_price"},
 			},
 			"spot_price": {
 				Type:         schema.TypeString,
 				Optional:     true,
+				ForceNew:     true,
 				Description:  "Price for spot instance. NOT supported for production deployment.",
 				RequiredWith: []string{"enable_spot_instance"},
 			},
@@ -901,9 +916,11 @@ func resourceAviatrixTransitGatewayCreate(d *schema.ResourceData, meta interface
 	if bgpOverLan && !(goaviatrix.IsCloudType(cloudType, goaviatrix.AzureArmRelatedCloudTypes|goaviatrix.GCP)) {
 		return fmt.Errorf("'enable_bgp_over_lan' is only valid for GCP (4), Azure (8), AzureGov (32) or AzureChina (2048)")
 	}
-	bgpLanInterfacesCount := d.Get("bgp_lan_interfaces_count").(int)
-	if bgpLanInterfacesCount != 1 && (!bgpOverLan || !goaviatrix.IsCloudType(cloudType, goaviatrix.AzureArmRelatedCloudTypes)) {
+	bgpLanInterfacesCount, isCountSet := d.GetOk("bgp_lan_interfaces_count")
+	if isCountSet && (!bgpOverLan || !goaviatrix.IsCloudType(cloudType, goaviatrix.AzureArmRelatedCloudTypes)) {
 		return fmt.Errorf("'bgp_lan_interfaces_count' is only valid for BGP over LAN enabled transit for Azure (8), AzureGov (32) or AzureChina (2048)")
+	} else if !isCountSet && bgpOverLan && goaviatrix.IsCloudType(cloudType, goaviatrix.AzureArmRelatedCloudTypes) {
+		return fmt.Errorf("please specify 'bgp_lan_interfaces_count' for BGP over LAN enabled Azure transit: %s", gateway.GwName)
 	}
 	var bgpLanVpcID []string
 	var bgpLanSpecifySubnet []string
@@ -940,7 +957,7 @@ func resourceAviatrixTransitGatewayCreate(d *schema.ResourceData, meta interface
 			gateway.BgpLanVpcID = strings.Join(bgpLanVpcID, ",")
 			gateway.BgpLanSpecifySubnet = strings.Join(bgpLanSpecifySubnet, ",")
 		} else if goaviatrix.IsCloudType(cloudType, goaviatrix.AzureArmRelatedCloudTypes) {
-			gateway.BgpLanInterfacesCount = bgpLanInterfacesCount
+			gateway.BgpLanInterfacesCount = bgpLanInterfacesCount.(int)
 		}
 	}
 
@@ -1042,10 +1059,6 @@ func resourceAviatrixTransitGatewayCreate(d *schema.ResourceData, meta interface
 		}
 		gateway.EnableSpotInstance = true
 		gateway.SpotPrice = spotPrice
-	} else {
-		if spotPrice != "" {
-			return fmt.Errorf("spot_price is set for enabling spot instance. Please set enable_spot_instance to true")
-		}
 	}
 
 	rxQueueSize := d.Get("rx_queue_size").(string)
@@ -1478,6 +1491,16 @@ func resourceAviatrixTransitGatewayCreate(d *schema.ResourceData, meta interface
 		}
 	}
 
+	if !d.Get("enable_gro_gso").(bool) {
+		gw := &goaviatrix.Gateway{
+			GwName: d.Get("gw_name").(string),
+		}
+		err := client.DisableGroGso(gw)
+		if err != nil {
+			return fmt.Errorf("couldn't disable GRO/GSO on transit gateway: %s", err)
+		}
+	}
+
 	if holdTime := d.Get("bgp_hold_time").(int); holdTime != defaultBgpHoldTime {
 		err := client.ChangeBgpHoldTime(gateway.GwName, holdTime)
 		if err != nil {
@@ -1613,10 +1636,10 @@ func resourceAviatrixTransitGatewayRead(d *schema.ResourceData, meta interface{}
 	d.Set("enable_active_standby", gw.EnableActiveStandby)
 	d.Set("enable_active_standby_preemptive", gw.EnableActiveStandbyPreemptive)
 	d.Set("enable_s2c_rx_balancing", gw.EnableS2CRxBalancing)
-	if goaviatrix.IsCloudType(gw.CloudType, goaviatrix.AzureArmRelatedCloudTypes) && gw.BgpLanInterfacesCount > 1 {
+	if goaviatrix.IsCloudType(gw.CloudType, goaviatrix.AzureArmRelatedCloudTypes) && gw.EnableBgpOverLan {
 		d.Set("bgp_lan_interfaces_count", gw.BgpLanInterfacesCount)
 	} else {
-		d.Set("bgp_lan_interfaces_count", 1)
+		d.Set("bgp_lan_interfaces_count", nil)
 	}
 	d.Set("enable_bgp_over_lan", goaviatrix.IsCloudType(gw.CloudType, goaviatrix.AzureArmRelatedCloudTypes|goaviatrix.GCPRelatedCloudTypes) && gw.EnableBgpOverLan)
 	if goaviatrix.IsCloudType(gw.CloudType, goaviatrix.GCPRelatedCloudTypes) && gw.EnableBgpOverLan {
@@ -1874,6 +1897,12 @@ func resourceAviatrixTransitGatewayRead(d *schema.ResourceData, meta interface{}
 		d.Set("private_mode_subnet_zone", nil)
 	}
 
+	enableGroGso, err := client.GetGroGsoStatus(gw)
+	if err != nil {
+		return fmt.Errorf("failed to get GRO/GSO status of transit gateway %s: %v", gw.GwName, err)
+	}
+	d.Set("enable_gro_gso", enableGroGso)
+
 	if gw.HaGw.GwSize == "" {
 		d.Set("ha_availability_domain", "")
 		d.Set("ha_azure_eip_name_resource_group", "")
@@ -2018,12 +2047,6 @@ func resourceAviatrixTransitGatewayUpdate(d *schema.ResourceData, meta interface
 		if o.(string) != "" && n.(string) != "" {
 			return fmt.Errorf("failed to update transit gateway: changing 'ha_azure_eip_name_resource_group' is not allowed")
 		}
-	}
-	if d.HasChange("enable_spot_instance") {
-		return fmt.Errorf("updating enable_spot_instance is not allowed")
-	}
-	if d.HasChange("spot_price") {
-		return fmt.Errorf("updating spot_price is not allowed")
 	}
 	if d.HasChange("lan_vpc_id") {
 		return fmt.Errorf("updating lan_vpc_id is not allowed")
@@ -2578,7 +2601,7 @@ func resourceAviatrixTransitGatewayUpdate(d *schema.ResourceData, meta interface
 	if enableGatewayLoadBalancer && !enableFireNet && !enableTransitFireNet {
 		return fmt.Errorf("'enable_gateway_load_balancer' is only valid when 'enable_firenet' or 'enable_transit_firenet' is set to true")
 	}
-	if enableGatewayLoadBalancer && goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.AWS) {
+	if enableGatewayLoadBalancer && !goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.AWS) {
 		return fmt.Errorf("'enable_gateway_load_balancer' is only valid when 'cloud_type' = 1 (AWS)")
 	}
 	if enableFireNet && enableTransitFireNet {
@@ -3066,6 +3089,20 @@ func resourceAviatrixTransitGatewayUpdate(d *schema.ResourceData, meta interface
 		}
 	}
 
+	if d.HasChange("enable_gro_gso") {
+		if d.Get("enable_gro_gso").(bool) {
+			err := client.EnableGroGso(gateway)
+			if err != nil {
+				return fmt.Errorf("couldn't enable GRO/GSO on transit gateway when updating: %s", err)
+			}
+		} else {
+			err := client.DisableGroGso(gateway)
+			if err != nil {
+				return fmt.Errorf("couldn't disable GRO/GSO on transit gateway when updating: %s", err)
+			}
+		}
+	}
+
 	if d.HasChange("bgp_hold_time") {
 		err := client.ChangeBgpHoldTime(gateway.GwName, d.Get("bgp_hold_time").(int))
 		if err != nil {
@@ -3250,12 +3287,20 @@ func resourceAviatrixTransitGatewayUpdate(d *schema.ResourceData, meta interface
 	}
 
 	if d.HasChanges("enable_bgp_over_lan", "bgp_lan_interfaces_count") {
-		if d.HasChange("enable_bgp_over_lan") && !d.Get("enable_bgp_over_lan").(bool) {
-			return fmt.Errorf("disabling BGP over LAN during update is not supported for transit: %s", gateway.GwName)
+		if d.HasChange("enable_bgp_over_lan") {
+			if !d.Get("enable_bgp_over_lan").(bool) {
+				return fmt.Errorf("disabling BGP over LAN during update is not supported for transit: %s", gateway.GwName)
+			}
+			if !goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.AzureArmRelatedCloudTypes) {
+				return fmt.Errorf("enabling BGP over LAN during update is only supported for Azure transit")
+			}
+			if _, ok := d.GetOk("bgp_lan_interfaces_count"); !ok {
+				return fmt.Errorf("please specify 'bgp_lan_interfaces_count' to enable BGP over LAN during update for Azure transit: %s", gateway.GwName)
+			}
 		}
 		if d.HasChange("bgp_lan_interfaces_count") {
 			if !d.Get("enable_bgp_over_lan").(bool) || !goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.AzureArmRelatedCloudTypes) {
-				return fmt.Errorf("could not update BGP over LAN interface count since it only supports BGP over LAN enabled spoke for Azure (8), AzureGov (32) or AzureChina (2048)")
+				return fmt.Errorf("could not update BGP over LAN interface count since it only supports BGP over LAN enabled transit for Azure (8), AzureGov (32) or AzureChina (2048)")
 			}
 			oldCount, newCount := d.GetChange("bgp_lan_interfaces_count")
 			if oldCount.(int) > newCount.(int) {

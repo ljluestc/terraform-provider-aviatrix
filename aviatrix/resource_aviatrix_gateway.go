@@ -398,6 +398,12 @@ func resourceAviatrixGateway() *schema.Resource {
 				Optional:    true,
 				Description: "Enable jumbo frame support for Gateway. Valid values: true or false. Default value: true.",
 			},
+			"enable_gro_gso": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     true,
+				Description: "Specify whether to disable GRO/GSO or not.",
+			},
 			"tags": {
 				Type:        schema.TypeMap,
 				Elem:        &schema.Schema{Type: schema.TypeString},
@@ -405,14 +411,24 @@ func resourceAviatrixGateway() *schema.Resource {
 				Description: "A map of tags to assign to the gateway.",
 			},
 			"enable_spot_instance": {
-				Type:         schema.TypeBool,
-				Optional:     true,
+				Type:     schema.TypeBool,
+				Optional: true,
+				ForceNew: true,
+				ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
+					v := val.(bool)
+					if !v {
+						errs = append(errs, fmt.Errorf("expected %s to true to enable spot instance, got: %v", key, val))
+						return warns, errs
+					}
+					return
+				},
 				Description:  "Enable spot instance. NOT supported for production deployment.",
 				RequiredWith: []string{"spot_price"},
 			},
 			"spot_price": {
 				Type:         schema.TypeString,
 				Optional:     true,
+				ForceNew:     true,
 				Description:  "Price for spot instance. NOT supported for production deployment.",
 				RequiredWith: []string{"enable_spot_instance"},
 			},
@@ -921,10 +937,6 @@ func resourceAviatrixGatewayCreate(d *schema.ResourceData, meta interface{}) err
 		}
 		gateway.EnableSpotInstance = true
 		gateway.SpotPrice = spotPrice
-	} else {
-		if spotPrice != "" {
-			return fmt.Errorf("spot_price is set for enabling spot instance. Please set enable_spot_instance to true")
-		}
 	}
 
 	rxQueueSize := d.Get("rx_queue_size").(string)
@@ -1190,6 +1202,13 @@ func resourceAviatrixGatewayCreate(d *schema.ResourceData, meta interface{}) err
 		err := client.DisableJumboFrame(gateway)
 		if err != nil {
 			return fmt.Errorf("couldn't disable jumbo frames for Gateway: %s", err)
+		}
+	}
+
+	if !d.Get("enable_gro_gso").(bool) {
+		err := client.DisableGroGso(gateway)
+		if err != nil {
+			return fmt.Errorf("couldn't disable GRO/GSO on gateway: %s", err)
 		}
 	}
 
@@ -1516,6 +1535,12 @@ func resourceAviatrixGatewayRead(d *schema.ResourceData, meta interface{}) error
 		d.Set("spot_price", gw.SpotPrice)
 	}
 
+	enableGroGso, err := client.GetGroGsoStatus(gw)
+	if err != nil {
+		return fmt.Errorf("failed to get GRO/GSO status of gateway %s: %v", gw.GwName, err)
+	}
+	d.Set("enable_gro_gso", enableGroGso)
+
 	if gw.HaGw.GwSize == "" {
 		d.Set("peering_ha_availability_domain", "")
 		d.Set("peering_ha_azure_eip_name_resource_group", "")
@@ -1632,12 +1657,6 @@ func resourceAviatrixGatewayUpdate(d *schema.ResourceData, meta interface{}) err
 		if o.(string) != "" && n.(string) != "" {
 			return fmt.Errorf("failed to update gateway: changing 'peering_ha_azure_eip_name_resource_group' is not allowed")
 		}
-	}
-	if d.HasChange("enable_spot_instance") {
-		return fmt.Errorf("updating enable_spot_instance is not allowed")
-	}
-	if d.HasChange("spot_price") {
-		return fmt.Errorf("updating spot_price is not allowed")
 	}
 	if d.HasChange("enable_designated_gateway") {
 		return fmt.Errorf("updating enable_designated_gateway is not allowed")
@@ -2486,6 +2505,20 @@ func resourceAviatrixGatewayUpdate(d *schema.ResourceData, meta interface{}) err
 			err := client.DisableJumboFrame(gateway)
 			if err != nil {
 				return fmt.Errorf("couldn't disable jumbo frames for Gateway when updating: %s", err)
+			}
+		}
+	}
+
+	if d.HasChange("enable_gro_gso") {
+		if d.Get("enable_gro_gso").(bool) {
+			err := client.EnableGroGso(gateway)
+			if err != nil {
+				return fmt.Errorf("couldn't enable GRO/GSO on gateway when updating: %s", err)
+			}
+		} else {
+			err := client.DisableGroGso(gateway)
+			if err != nil {
+				return fmt.Errorf("couldn't disable GRO/GSO on gateway when updating: %s", err)
 			}
 		}
 	}

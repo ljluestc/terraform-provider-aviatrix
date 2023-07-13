@@ -8,6 +8,10 @@ description: |-
 
 # aviatrix_edge_csp_ha
 
+-> **NOTE:** Since V3.1.1+, please use resource **aviatrix_edge_zededa_ha** instead. Resource **aviatrix_edge_csp_ha** will be deprecated in the V3.2.0 release.
+
+-> **NOTE:** A primary **aviatrix_edge_csp** is required to create **aviatrix_edge_csp_ha**.
+
 The **aviatrix_edge_csp_ha** resource creates the Aviatrix Edge CSP HA.
 
 ## Example Usage
@@ -15,16 +19,20 @@ The **aviatrix_edge_csp_ha** resource creates the Aviatrix Edge CSP HA.
 ```hcl
 # Create an Edge CSP HA
 resource "aviatrix_edge_csp_ha" "test" {
-  primary_gw_name             = "primary_edge_csp"
-  management_interface_config = "DHCP"
-  compute_node_uuid           = "abcde12345"
-  lan_interface_ip_prefix     = "10.220.11.20/24"
+  primary_gw_name   = "primary_edge_csp"
+  compute_node_uuid = "abcde12345"
 
   interfaces {
     name       = "eth1"
     type       = "LAN"
     ip_address = "10.220.11.20/24"
     gateway_ip = "10.220.11.1"
+  }
+
+  interfaces {
+    name        = "eth2"
+    type        = "MANAGEMENT"
+    enable_dhcp = true
   }
 }
 ```
@@ -34,24 +42,25 @@ resource "aviatrix_edge_csp_ha" "test" {
 The following arguments are supported:
 
 ### Required
-* `primary_gw_name` - (Required) Edge CSP name.
+* `primary_gw_name` - (Required) Primary Edge CSP name.
 * `compute_node_uuid` - (Required) Edge CSP compute node UUID.
-* `management_interface_config` - (Required) Management interface configuration. Valid values: "DHCP", "Static".
-* `lan_interface_ip_prefix` - (Required) LAN interface IP and subnet prefix.
 
 -> **NOTE:** At least one LAN interface is required.
-* `interfaces` - (Required) WAN/LAN interfaces.
-    * `name` - (Required) Interface name.
-    * `type` - (Required) Type.
-    * `bandwidth` - (Optional) Bandwidth.
-    * `enable_dhcp` - (Optional) Enable DHCP. Valid values: true, false. Default value: false.
-    * `wan_public_ip` - (Optional) WAN public IP.
-    * `ip_address` - (Optional) Interface static IP address.
-    * `gateway_ip` - (Optional) Gateway IP.
-    * `dns_server_ip` - (Optional) Primary DNS server IP.
-    * `secondary_dns_server_ip` - (Optional) Secondary DNS server IP.
-    * `tag` - (Optional) Tag.
-    
+* `interfaces` - (Required) WAN/LAN/MANAGEMENT interfaces.
+  * `name` - (Required) Interface name.
+  * `type` - (Required) Type.
+  * `bandwidth` - (Optional) The rate of data can be moved through the interface, requires an integer value. Unit is in Mb/s.
+  * `enable_dhcp` - (Optional) Enable DHCP. Valid values: true, false. Default value: false.
+  * `wan_public_ip` - (Optional) WAN public IP.
+  * `ip_address` - (Optional) Interface static IP address.
+  * `gateway_ip` - (Optional) Gateway IP.
+  * `dns_server_ip` - (Optional) Primary DNS server IP.
+  * `secondary_dns_server_ip` - (Optional) Secondary DNS server IP.
+  * `tag` - (Optional) Tag.
+
+### Optional
+* `management_egress_ip_prefix_list` - (Optional) Set of management egress gateway IP and subnet prefix. Example: ["67.207.104.16/29", "64.71.12.144/29"].    
+
 ## Attribute Reference
 
 In addition to all arguments above, the following attribute is exported:

@@ -9,7 +9,9 @@ import (
 
 type SmartGroupMatchExpression struct {
 	CIDR        string `json:"cidr,omitempty"`
+	FQDN        string `json:"fqdn,omitempty"`
 	Type        string `json:"type,omitempty"`
+	Site        string `json:"site,omitempty"`
 	ResId       string `json:"res_id,omitempty"`
 	AccountId   string `json:"account_id,omitempty"`
 	AccountName string `json:"account_name,omitempty"`
@@ -37,6 +39,12 @@ func smartGroupFilterToMap(filter *SmartGroupMatchExpression) map[string]string 
 	}
 	if len(filter.CIDR) > 0 {
 		filterMap["cidr"] = filter.CIDR
+	}
+	if len(filter.FQDN) > 0 {
+		filterMap["fqdn"] = filter.FQDN
+	}
+	if len(filter.Site) > 0 {
+		filterMap["site"] = filter.Site
 	}
 	if len(filter.ResId) > 0 {
 		filterMap["res_id"] = filter.ResId
@@ -143,7 +151,9 @@ func (c *Client) GetSmartGroup(ctx context.Context, uuid string) (*SmartGroup, e
 
 				filter := &SmartGroupMatchExpression{
 					CIDR:        filterMap["cidr"],
+					FQDN:        filterMap["fqdn"],
 					Type:        filterMap["type"],
+					Site:        filterMap["site"],
 					ResId:       filterMap["res_id"],
 					AccountId:   filterMap["account_id"],
 					AccountName: filterMap["account_name"],
@@ -180,4 +190,74 @@ func (c *Client) UpdateSmartGroup(ctx context.Context, smartGroup *SmartGroup, u
 func (c *Client) DeleteSmartGroup(ctx context.Context, uuid string) error {
 	endpoint := fmt.Sprintf("app-domains/%s", uuid)
 	return c.DeleteAPIContext25(ctx, endpoint, nil)
+}
+
+func (c *Client) GetSmartGroups(ctx context.Context) ([]*SmartGroup, error) {
+	endpoint := "app-domains"
+
+	type SmartGroupMatchExpressionResult struct {
+		All map[string]string `json:"all"`
+	}
+
+	type SmartGroupAnyResult struct {
+		Any []SmartGroupMatchExpressionResult `json:"any"`
+	}
+
+	type SmartGroupResult struct {
+		UUID     string              `json:"uuid"`
+		Name     string              `json:"name"`
+		Selector SmartGroupAnyResult `json:"selector"`
+	}
+
+	type SmartGroupResp struct {
+		SmartGroups []SmartGroupResult `json:"app_domains"`
+	}
+
+	var data SmartGroupResp
+	err := c.GetAPIContext25(ctx, &data, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var smartGroups []*SmartGroup
+	for _, smartGroupResult := range data.SmartGroups {
+		if smartGroupResult.UUID != "" {
+			smartGroup := &SmartGroup{
+				Name: smartGroupResult.Name,
+				UUID: smartGroupResult.UUID,
+			}
+
+			for _, filterResult := range smartGroupResult.Selector.Any {
+				filterMap := filterResult.All
+
+				filter := &SmartGroupMatchExpression{
+					CIDR:        filterMap["cidr"],
+					FQDN:        filterMap["fqdn"],
+					Type:        filterMap["type"],
+					Site:        filterMap["site"],
+					ResId:       filterMap["res_id"],
+					AccountId:   filterMap["account_id"],
+					AccountName: filterMap["account_name"],
+					Name:        filterMap["name"],
+					Region:      filterMap["region"],
+					Zone:        filterMap["zone"],
+				}
+
+				tags := make(map[string]string)
+				for key, value := range filterMap {
+					if strings.HasPrefix(key, "tags.") {
+						tags[strings.TrimPrefix(key, "tags.")] = value
+					}
+				}
+
+				if len(tags) > 0 {
+					filter.Tags = tags
+				}
+
+				smartGroup.Selector.Expressions = append(smartGroup.Selector.Expressions, filter)
+			}
+			smartGroups = append(smartGroups, smartGroup)
+		}
+	}
+	return smartGroups, nil
 }

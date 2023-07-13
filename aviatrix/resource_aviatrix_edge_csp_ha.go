@@ -5,8 +5,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
-
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 
 	"github.com/AviatrixSystems/terraform-provider-aviatrix/v3/goaviatrix"
@@ -36,22 +34,10 @@ func resourceAviatrixEdgeCSPHa() *schema.Resource {
 				ForceNew:    true,
 				Description: "Compute node UUID.",
 			},
-			"management_interface_config": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ForceNew:     true,
-				Description:  "Management interface configuration. Valid values: 'DHCP' and 'Static'.",
-				ValidateFunc: validation.StringInSlice([]string{"DHCP", "Static"}, false),
-			},
-			"lan_interface_ip_prefix": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "LAN interface IP/prefix.",
-			},
 			"interfaces": {
 				Type:        schema.TypeSet,
 				Required:    true,
-				Description: "",
+				Description: "WAN/LAN/MANAGEMENT interfaces.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name": {
@@ -67,7 +53,7 @@ func resourceAviatrixEdgeCSPHa() *schema.Resource {
 						"bandwidth": {
 							Type:        schema.TypeInt,
 							Optional:    true,
-							Description: "Bandwidth.",
+							Description: "The rate of data can be moved through the interface, requires an integer value. Unit is in Mb/s.",
 						},
 						"enable_dhcp": {
 							Type:        schema.TypeBool,
@@ -107,21 +93,30 @@ func resourceAviatrixEdgeCSPHa() *schema.Resource {
 					},
 				},
 			},
+			"management_egress_ip_prefix_list": {
+				Type:        schema.TypeSet,
+				Optional:    true,
+				Description: "Set of management egress gateway IP/prefix.",
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+				},
+			},
 			"account_name": {
 				Type:        schema.TypeString,
 				Computed:    true,
 				Description: "Edge CSP account name.",
 			},
 		},
+		DeprecationMessage: "Since V3.1.1+, please use resource aviatrix_edge_zededa_ha instead. Resource " +
+			"aviatrix_edge_csp_ha will be deprecated in the V3.2.0 release.",
 	}
 }
 
 func marshalEdgeCSPHaInput(d *schema.ResourceData) *goaviatrix.EdgeCSPHa {
 	edgeCSPHa := &goaviatrix.EdgeCSPHa{
-		PrimaryGwName:             d.Get("primary_gw_name").(string),
-		ComputeNodeUuid:           d.Get("compute_node_uuid").(string),
-		ManagementInterfaceConfig: d.Get("management_interface_config").(string),
-		LanInterfaceIpPrefix:      d.Get("lan_interface_ip_prefix").(string),
+		PrimaryGwName:            d.Get("primary_gw_name").(string),
+		ComputeNodeUuid:          d.Get("compute_node_uuid").(string),
+		ManagementEgressIpPrefix: strings.Join(getStringSet(d, "management_egress_ip_prefix_list"), ","),
 	}
 
 	interfaces := d.Get("interfaces").(*schema.Set).List()
@@ -158,20 +153,6 @@ func resourceAviatrixEdgeCSPHaCreate(ctx context.Context, d *schema.ResourceData
 	}
 
 	d.SetId(edgeCSPHaName)
-
-	gatewayForEdgeCSPFunctions := &goaviatrix.EdgeCSP{
-		GwName: edgeCSPHaName,
-	}
-
-	if len(edgeCSPHa.InterfaceList) != 0 {
-		gatewayForEdgeCSPFunctions.InterfaceList = edgeCSPHa.InterfaceList
-
-		err = client.UpdateEdgeCSPHa(ctx, gatewayForEdgeCSPFunctions)
-		if err != nil {
-			return diag.Errorf("could not config WAN/LAN interfaces after Edge CSP HA creation: %v", err)
-		}
-	}
-
 	return resourceAviatrixEdgeCSPHaRead(ctx, d, meta)
 }
 
@@ -199,29 +180,27 @@ func resourceAviatrixEdgeCSPHaRead(ctx context.Context, d *schema.ResourceData, 
 	d.Set("compute_node_uuid", edgeCSPHaResp.ComputeNodeUuid)
 	d.Set("account_name", edgeCSPHaResp.AccountName)
 
-	if edgeCSPHaResp.Dhcp {
-		d.Set("management_interface_config", "DHCP")
+	if edgeCSPHaResp.ManagementEgressIpPrefix == "" {
+		d.Set("management_egress_ip_prefix_list", nil)
 	} else {
-		d.Set("management_interface_config", "Static")
+		d.Set("management_egress_ip_prefix_list", strings.Split(edgeCSPHaResp.ManagementEgressIpPrefix, ","))
 	}
 
 	var interfaces []map[string]interface{}
 	for _, if0 := range edgeCSPHaResp.InterfaceList {
-		if if0.Type != "MANAGEMENT" {
-			if1 := make(map[string]interface{})
-			if1["name"] = if0.IfName
-			if1["type"] = if0.Type
-			if1["bandwidth"] = if0.Bandwidth
-			if1["wan_public_ip"] = if0.PublicIp
-			if1["tag"] = if0.Tag
-			if1["enable_dhcp"] = if0.Dhcp
-			if1["ip_address"] = if0.IpAddr
-			if1["gateway_ip"] = if0.GatewayIp
-			if1["dns_server_ip"] = if0.DnsPrimary
-			if1["secondary_dns_server_ip"] = if0.DnsSecondary
+		if1 := make(map[string]interface{})
+		if1["name"] = if0.IfName
+		if1["type"] = if0.Type
+		if1["bandwidth"] = if0.Bandwidth
+		if1["wan_public_ip"] = if0.PublicIp
+		if1["tag"] = if0.Tag
+		if1["enable_dhcp"] = if0.Dhcp
+		if1["ip_address"] = if0.IpAddr
+		if1["gateway_ip"] = if0.GatewayIp
+		if1["dns_server_ip"] = if0.DnsPrimary
+		if1["secondary_dns_server_ip"] = if0.DnsSecondary
 
-			interfaces = append(interfaces, if1)
-		}
+		interfaces = append(interfaces, if1)
 	}
 
 	if err = d.Set("interfaces", interfaces); err != nil {
@@ -239,28 +218,17 @@ func resourceAviatrixEdgeCSPHaUpdate(ctx context.Context, d *schema.ResourceData
 
 	d.Partial(true)
 
-	gatewayForEaasFunctions := &goaviatrix.EdgeSpoke{
-		GwName: d.Id(),
-	}
 	gatewayForEdgeCSPFunctions := &goaviatrix.EdgeCSP{
 		GwName: d.Id(),
 	}
 
-	if d.HasChanges("lan_interface_ip_prefix") {
-		gatewayForEaasFunctions.LanInterfaceIpPrefix = edgeCSPHa.LanInterfaceIpPrefix
-
-		err := client.UpdateEdgeSpokeIpConfigurations(ctx, gatewayForEaasFunctions)
-		if err != nil {
-			return diag.Errorf("could not update IP configurations during Edge CSP HA update: %v", err)
-		}
-	}
-
-	if d.HasChange("interfaces") {
+	if d.HasChanges("interfaces", "management_egress_ip_prefix_list") {
 		gatewayForEdgeCSPFunctions.InterfaceList = edgeCSPHa.InterfaceList
+		gatewayForEdgeCSPFunctions.ManagementEgressIpPrefix = edgeCSPHa.ManagementEgressIpPrefix
 
 		err := client.UpdateEdgeCSPHa(ctx, gatewayForEdgeCSPFunctions)
 		if err != nil {
-			return diag.Errorf("could not update WAN/LAN interfaces during Edge CSP HA update: %v", err)
+			return diag.Errorf("could not update management egress ip prefix list or WAN/LAN/VLAN interfaces during Edge CSP HA update: %v", err)
 		}
 	}
 
@@ -275,7 +243,7 @@ func resourceAviatrixEdgeCSPHaDelete(ctx context.Context, d *schema.ResourceData
 
 	err := client.DeleteEdgeCSP(ctx, accountName, d.Id())
 	if err != nil {
-		return diag.Errorf("could not delete Edge CSP: %v", err)
+		return diag.Errorf("could not delete Edge CSP HA %s: %v", d.Id(), err)
 	}
 
 	return nil

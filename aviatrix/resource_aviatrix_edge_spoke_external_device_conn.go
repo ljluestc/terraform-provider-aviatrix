@@ -3,6 +3,7 @@ package aviatrix
 import (
 	"context"
 	"log"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ func resourceAviatrixEdgeSpokeExternalDeviceConn() *schema.Resource {
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceAviatrixEdgeSpokeExternalDeviceConnCreate,
 		ReadWithoutTimeout:   resourceAviatrixEdgeSpokeExternalDeviceConnRead,
+		UpdateWithoutTimeout: resourceAviatrixEdgeSpokeExternalDeviceConnUpdate,
 		DeleteWithoutTimeout: resourceAviatrixEdgeSpokeExternalDeviceConnDelete,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -33,7 +35,8 @@ func resourceAviatrixEdgeSpokeExternalDeviceConn() *schema.Resource {
 			},
 			"connection_name": {
 				Type:        schema.TypeString,
-				Required:    true,
+				Optional:    true,
+				Computed:    true,
 				ForceNew:    true,
 				Description: "The name of the spoke external device connection which is going to be created.",
 			},
@@ -92,14 +95,12 @@ func resourceAviatrixEdgeSpokeExternalDeviceConn() *schema.Resource {
 				Type:        schema.TypeInt,
 				Optional:    true,
 				Default:     0,
-				ForceNew:    true,
 				Description: "Number of retries.",
 			},
 			"retry_interval": {
 				Type:        schema.TypeInt,
 				Optional:    true,
 				Default:     300,
-				ForceNew:    true,
 				Description: "Retry interval in seconds.",
 			},
 			"enable_edge_underlay": {
@@ -114,6 +115,68 @@ func resourceAviatrixEdgeSpokeExternalDeviceConn() *schema.Resource {
 				ForceNew:     true,
 				ValidateFunc: validation.StringInSlice([]string{"AWS", "AZURE"}, false),
 				Description:  "Remote cloud type.",
+			},
+			"ha_enabled": {
+				Type:     schema.TypeBool,
+				Optional: true,
+				Default:  false,
+				ForceNew: true,
+				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
+					return d.Get("enable_edge_underlay").(bool)
+				},
+				Description: "Set as true if there are two external devices.",
+			},
+			"backup_bgp_remote_as_num": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				Default:      "",
+				ForceNew:     true,
+				Description:  "Backup BGP remote ASN (Autonomous System Number). Integer between 1-4294967294.",
+				ValidateFunc: goaviatrix.ValidateASN,
+			},
+			"backup_local_lan_ip": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				ForceNew:    true,
+				Description: "Backup Local LAN IP.",
+			},
+			"backup_remote_lan_ip": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				ForceNew:    true,
+				Description: "Backup Remote LAN IP.",
+			},
+			"prepend_as_path": {
+				Type:        schema.TypeList,
+				Optional:    true,
+				Description: "Connection AS Path Prepend customized by specifying AS PATH for a BGP connection.",
+				Elem: &schema.Schema{
+					Type:         schema.TypeString,
+					ValidateFunc: goaviatrix.ValidateASN,
+				},
+				MaxItems: 25,
+			},
+			"bgp_md5_key": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Sensitive:   true,
+				Description: "BGP MD5 authentication key.",
+			},
+			"backup_bgp_md5_key": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Sensitive:   true,
+				Description: "Backup BGP MD5 authentication key.",
+			},
+			"manual_bgp_advertised_cidrs": {
+				Type: schema.TypeSet,
+				Elem: &schema.Schema{
+					Type:         schema.TypeString,
+					ValidateFunc: validation.IsCIDR,
+				},
+				Optional:    true,
+				Description: "Configure manual BGP advertised CIDRs for this connection.",
 			},
 		},
 	}
@@ -130,15 +193,30 @@ func marshalEdgeSpokeExternalDeviceConnInput(d *schema.ResourceData) *goaviatrix
 		RemoteLanIP:        d.Get("remote_lan_ip").(string),
 		EnableEdgeUnderlay: d.Get("enable_edge_underlay").(bool),
 		RemoteCloudType:    d.Get("remote_cloud_type").(string),
+		BackupLocalLanIP:   d.Get("backup_local_lan_ip").(string),
+		BackupRemoteLanIP:  d.Get("backup_remote_lan_ip").(string),
+		BgpMd5Key:          d.Get("bgp_md5_key").(string),
+		BackupBgpMd5Key:    d.Get("backup_bgp_md5_key").(string),
+	}
+
+	haEnabled := d.Get("ha_enabled").(bool)
+	if haEnabled {
+		externalDeviceConn.HAEnabled = "true"
 	}
 
 	bgpLocalAsNum, err := strconv.Atoi(d.Get("bgp_local_as_num").(string))
 	if err == nil {
 		externalDeviceConn.BgpLocalAsNum = bgpLocalAsNum
 	}
+
 	bgpRemoteAsNum, err := strconv.Atoi(d.Get("bgp_remote_as_num").(string))
 	if err == nil {
 		externalDeviceConn.BgpRemoteAsNum = bgpRemoteAsNum
+	}
+
+	backupBgpLocalAsNum, err := strconv.Atoi(d.Get("backup_bgp_remote_as_num").(string))
+	if err == nil {
+		externalDeviceConn.BackupBgpRemoteAsNum = backupBgpLocalAsNum
 	}
 
 	return externalDeviceConn
@@ -149,16 +227,55 @@ func resourceAviatrixEdgeSpokeExternalDeviceConnCreate(ctx context.Context, d *s
 
 	externalDeviceConn := marshalEdgeSpokeExternalDeviceConnInput(d)
 
-	d.SetId(externalDeviceConn.ConnectionName + "~" + externalDeviceConn.VpcID)
+	if !externalDeviceConn.EnableEdgeUnderlay && externalDeviceConn.ConnectionName == "" {
+		return diag.Errorf("'connection_name' is required when 'enable_edge_underlay' is false")
+	}
+
+	if externalDeviceConn.EnableEdgeUnderlay && externalDeviceConn.ConnectionName != "" {
+		return diag.Errorf("please set 'connection_name' to empty when 'enable_edge_underlay' is true")
+	}
+
+	if externalDeviceConn.HAEnabled == "true" {
+		if externalDeviceConn.BackupRemoteLanIP == "" {
+			return diag.Errorf("ha is enabled and 'tunnel_protocol' = 'LAN', please specify 'backup_remote_lan_ip'")
+		}
+
+		if externalDeviceConn.BackupBgpRemoteAsNum == 0 {
+			return diag.Errorf("ha is enabled, and 'connection_type' is 'bgp', please specify 'backup_bgp_remote_as_num'")
+		}
+	} else {
+		if externalDeviceConn.BackupRemoteLanIP != "" || externalDeviceConn.BackupLocalLanIP != "" {
+			return diag.Errorf("ha is not enabled, please set 'backup_remote_lan_ip' and 'backup_local_lan_ip' to empty")
+		}
+		if externalDeviceConn.BackupBgpRemoteAsNum != 0 {
+			return diag.Errorf("ha is not enabled, and 'connection_type' is 'bgp', please specify 'backup_bgp_remote_as_num' to empty")
+		}
+	}
+
+	if externalDeviceConn.EnableEdgeUnderlay && externalDeviceConn.HAEnabled == "true" {
+		return diag.Errorf("please use a separate edge_spoke_external_device_conn to create WAN underlay connection for Edge HA")
+	}
+
 	flag := false
 	defer resourceAviatrixEdgeSpokeExternalDeviceConnReadIfRequired(ctx, d, meta, &flag)
 
 	numberOfRetries := d.Get("number_of_retries").(int)
 	retryInterval := d.Get("retry_interval").(int)
 
+	var edgeExternalDeviceConn goaviatrix.EdgeExternalDeviceConn
+	if externalDeviceConn.EnableEdgeUnderlay {
+		edgeExternalDeviceConn = goaviatrix.EdgeExternalDeviceConn(*externalDeviceConn)
+	}
+
 	var err error
+	var result string
 	for i := 0; ; i++ {
-		err = client.CreateExternalDeviceConn(externalDeviceConn)
+		if externalDeviceConn.EnableEdgeUnderlay {
+			result, err = client.CreateEdgeExternalDeviceConn(&edgeExternalDeviceConn)
+		} else {
+			err = client.CreateExternalDeviceConn(externalDeviceConn)
+		}
+
 		if err != nil {
 			if !strings.Contains(err.Error(), "not ready") && !strings.Contains(err.Error(), "not up") {
 				return diag.Errorf("failed to create Edge as a Spoke external device connection: %s", err)
@@ -174,6 +291,38 @@ func resourceAviatrixEdgeSpokeExternalDeviceConnCreate(ctx context.Context, d *s
 		}
 	}
 
+	if externalDeviceConn.EnableEdgeUnderlay {
+		re := regexp.MustCompile(`underlay BGP connection (.*) (?:in|on)`)
+		match := re.FindStringSubmatch(result)
+		if len(match) < 2 {
+			return diag.Errorf("could not get underlay BGP connection name")
+		}
+		connName := match[1]
+		d.Set("connection_name", connName)
+		externalDeviceConn.ConnectionName = connName
+	}
+
+	if _, ok := d.GetOk("prepend_as_path"); ok {
+		var prependASPath []string
+		for _, v := range d.Get("prepend_as_path").([]interface{}) {
+			prependASPath = append(prependASPath, v.(string))
+		}
+
+		err = client.EditSpokeExternalDeviceConnASPathPrepend(externalDeviceConn, prependASPath)
+		if err != nil {
+			return diag.Errorf("could not set prepend_as_path: %v", err)
+		}
+	}
+
+	manualBGPCidrs := getStringSet(d, "manual_bgp_advertised_cidrs")
+	if len(manualBGPCidrs) > 0 {
+		err = client.EditTransitConnectionBGPManualAdvertiseCIDRs(externalDeviceConn.GwName, externalDeviceConn.ConnectionName, manualBGPCidrs)
+		if err != nil {
+			return diag.Errorf("could not edit manual advertised BGP cidrs: %v", err)
+		}
+	}
+
+	d.SetId(d.Get("connection_name").(string) + "~" + externalDeviceConn.VpcID + "~" + externalDeviceConn.GwName)
 	return resourceAviatrixEdgeSpokeExternalDeviceConnReadIfRequired(ctx, d, meta, &flag)
 }
 
@@ -188,26 +337,27 @@ func resourceAviatrixEdgeSpokeExternalDeviceConnReadIfRequired(ctx context.Conte
 func resourceAviatrixEdgeSpokeExternalDeviceConnRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*goaviatrix.Client)
 
-	connectionName := d.Get("connection_name").(string)
 	vpcID := d.Get("site_id").(string)
-	if connectionName == "" || vpcID == "" {
+	if vpcID == "" {
 		id := d.Id()
-		log.Printf("[DEBUG] Looks like an import, no 'connection_name' or 'site_id' received. Import Id is %s", id)
+		log.Printf("[DEBUG] Looks like an import, no 'site_id' received. Import Id is %s", id)
 		parts := strings.Split(id, "~")
-		if len(parts) != 2 {
-			return diag.Errorf("expected import ID in the form 'connection_name~site_id' instead got %q", id)
+		if len(parts) != 3 {
+			return diag.Errorf("expected import ID in the form 'connection_name~site_id~gw_name' instead got %q", id)
 		}
 		d.Set("connection_name", parts[0])
 		d.Set("site_id", parts[1])
+		d.Set("gw_name", parts[2])
 		d.SetId(id)
 	}
 
 	externalDeviceConn := &goaviatrix.ExternalDeviceConn{
 		VpcID:          d.Get("site_id").(string),
 		ConnectionName: d.Get("connection_name").(string),
+		GwName:         d.Get("gw_name").(string),
 	}
 
-	conn, err := client.GetExternalDeviceConnDetail(externalDeviceConn)
+	conn, err := client.GetEdgeExternalDeviceConnDetail(externalDeviceConn)
 	if err != nil {
 		if err == goaviatrix.ErrNotFound {
 			d.SetId("")
@@ -221,28 +371,108 @@ func resourceAviatrixEdgeSpokeExternalDeviceConnRead(ctx context.Context, d *sch
 	d.Set("gw_name", conn.GwName)
 	d.Set("connection_type", conn.ConnectionType)
 	d.Set("tunnel_protocol", conn.TunnelProtocol)
-	d.Set("bgp_local_as_num", strconv.Itoa(conn.BgpLocalAsNum))
-	d.Set("bgp_remote_as_num", strconv.Itoa(conn.BgpRemoteAsNum))
 	d.Set("local_lan_ip", conn.LocalLanIP)
 	d.Set("remote_lan_ip", conn.RemoteLanIP)
 	d.Set("enable_edge_underlay", conn.EnableEdgeUnderlay)
 	d.Set("remote_cloud_type", conn.RemoteCloudType)
 
-	d.SetId(conn.ConnectionName + "~" + conn.VpcID)
+	if conn.BgpLocalAsNum != 0 {
+		d.Set("bgp_local_as_num", strconv.Itoa(conn.BgpLocalAsNum))
+	}
+	if conn.BgpRemoteAsNum != 0 {
+		d.Set("bgp_remote_as_num", strconv.Itoa(conn.BgpRemoteAsNum))
+	}
+
+	if conn.HAEnabled == "enabled" {
+		if !conn.EnableEdgeUnderlay {
+			d.Set("ha_enabled", true)
+			if conn.BackupBgpRemoteAsNum != 0 {
+				d.Set("backup_bgp_remote_as_num", strconv.Itoa(conn.BackupBgpRemoteAsNum))
+			}
+			d.Set("backup_remote_lan_ip", conn.BackupRemoteLanIP)
+			d.Set("backup_local_lan_ip", conn.BackupLocalLanIP)
+		}
+	} else {
+		d.Set("ha_enabled", false)
+	}
+
+	if conn.PrependAsPath != "" {
+		var prependAsPath []string
+		for _, str := range strings.Split(conn.PrependAsPath, " ") {
+			prependAsPath = append(prependAsPath, strings.TrimSpace(str))
+		}
+
+		err = d.Set("prepend_as_path", prependAsPath)
+		if err != nil {
+			return diag.Errorf("could not set value for prepend_as_path: %v", err)
+		}
+	}
+
+	if err := d.Set("manual_bgp_advertised_cidrs", conn.ManualBGPCidrs); err != nil {
+		return diag.Errorf("could not set value for manual_bgp_advertised_cidrs: %v", err)
+	}
+
+	d.SetId(conn.ConnectionName + "~" + conn.VpcID + "~" + conn.GwName)
 	return nil
+}
+
+func resourceAviatrixEdgeSpokeExternalDeviceConnUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	client := meta.(*goaviatrix.Client)
+	d.Partial(true)
+
+	externalDeviceConn := marshalEdgeSpokeExternalDeviceConnInput(d)
+
+	if d.HasChange("prepend_as_path") {
+		var prependASPath []string
+		for _, v := range d.Get("prepend_as_path").([]interface{}) {
+			prependASPath = append(prependASPath, v.(string))
+		}
+		err := client.EditSpokeExternalDeviceConnASPathPrepend(externalDeviceConn, prependASPath)
+		if err != nil {
+			return diag.Errorf("could not update prepend_as_path: %v", err)
+		}
+	}
+
+	if externalDeviceConn.EnableEdgeUnderlay && d.HasChanges("bgp_md5_key", "backup_bgp_md5_key") {
+		edgeExternalDeviceConn := goaviatrix.EdgeExternalDeviceConn(*externalDeviceConn)
+
+		edgeExternalDeviceConn.BgpMd5KeyChanged = true
+
+		_, err := client.CreateEdgeExternalDeviceConn(&edgeExternalDeviceConn)
+		if err != nil {
+			return diag.Errorf("could not update BGP MD5 key: %s", err)
+		}
+	}
+
+	if d.HasChange("manual_bgp_advertised_cidrs") {
+		manualBGPCidrs := getStringSet(d, "manual_bgp_advertised_cidrs")
+		err := client.EditTransitConnectionBGPManualAdvertiseCIDRs(externalDeviceConn.GwName, externalDeviceConn.ConnectionName, manualBGPCidrs)
+		if err != nil {
+			return diag.Errorf("could not edit manual advertise manual cidrs: %v", err)
+		}
+	}
+
+	d.Partial(false)
+	return resourceAviatrixEdgeSpokeExternalDeviceConnRead(ctx, d, meta)
 }
 
 func resourceAviatrixEdgeSpokeExternalDeviceConnDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	client := meta.(*goaviatrix.Client)
 
-	externalDeviceConn := &goaviatrix.ExternalDeviceConn{
-		VpcID:          d.Get("site_id").(string),
-		ConnectionName: d.Get("connection_name").(string),
-	}
+	externalDeviceConn := marshalEdgeSpokeExternalDeviceConnInput(d)
 
-	err := client.DeleteExternalDeviceConn(externalDeviceConn)
-	if err != nil {
-		return diag.Errorf("failed to delete Edge as a Spoke external device connection: %s", err)
+	if externalDeviceConn.EnableEdgeUnderlay {
+		edgeExternalDeviceConn := goaviatrix.EdgeExternalDeviceConn(*externalDeviceConn)
+		err := client.DeleteEdgeExternalDeviceConn(&edgeExternalDeviceConn)
+
+		if err != nil {
+			return diag.Errorf("failed to delete Edge as a Spoke external device connection: %s", err)
+		}
+	} else {
+		err := client.DeleteExternalDeviceConn(externalDeviceConn)
+		if err != nil {
+			return diag.Errorf("failed to delete Edge as a Spoke external device connection: %s", err)
+		}
 	}
 
 	return nil

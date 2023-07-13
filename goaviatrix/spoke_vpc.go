@@ -20,7 +20,7 @@ type SpokeVpc struct {
 	Subnet                       string `form:"gw_subnet,omitempty" json:"gw_subnet,omitempty"`
 	VpcRegion                    string `form:"vpc_region,omitempty" json:"vpc_region,omitempty"`
 	VpcSize                      string `form:"gw_size,omitempty" json:"vpc_size,omitempty"`
-	EnableNat                    string `form:"nat_enabled,omitempty" json:"enable_nat,omitempty"`
+	EnableNat                    string `form:"enable_nat,omitempty" json:"enable_nat,omitempty"`
 	EnableVpcDnsServer           string `json:"use_vpc_dns,omitempty"`
 	HASubnet                     string `form:"ha_subnet,omitempty"`
 	HAZone                       string `form:"new_zone,omitempty"`
@@ -47,9 +47,10 @@ type SpokeVpc struct {
 	LearnedCidrsApproval         string   `form:"learned_cidrs_approval,omitempty"`
 	ApprovedLearnedCidrs         []string `form:"approved_learned_cidrs"`
 	Async                        bool     `form:"async,omitempty"`
-	BgpOverLan                   string   `form:"bgp_over_lan,omitempty"`
+	BgpOverLan                   bool     `form:"bgp_lan,omitempty"`
 	BgpLanInterfacesCount        int      `form:"bgp_lan_intf_count,omitempty"`
-	LbVpcId                      string   `form:"private_mode_load_balancer,omitempty"`
+	LbVpcId                      string   `form:"lb_vpc_id,omitempty"`
+	EnableGlobalVpc              bool     `form:"global_vpc"`
 }
 
 type SpokeGatewayAdvancedConfig struct {
@@ -475,4 +476,22 @@ func (c *Client) DisableSpokePreserveAsPath(spokeGateway *SpokeVpc) error {
 		"gateway_name": spokeGateway.GwName,
 	}
 	return c.PostAPI(action, data, BasicCheck)
+}
+
+func (c *Client) EnableGlobalVpc(gateway *Gateway) error {
+	form := map[string]string{
+		"action":       "enable_global_vpc",
+		"CID":          c.CID,
+		"gateway_name": gateway.GwName,
+	}
+	return c.PostAPI(form["action"], form, BasicCheck)
+}
+
+func (c *Client) DisableGlobalVpc(gateway *Gateway) error {
+	form := map[string]string{
+		"action":       "disable_global_vpc",
+		"CID":          c.CID,
+		"gateway_name": gateway.GwName,
+	}
+	return c.PostAPI(form["action"], form, BasicCheck)
 }

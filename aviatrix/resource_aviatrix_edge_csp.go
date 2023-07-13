@@ -62,22 +62,10 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 				ForceNew:    true,
 				Description: "Edge CSP template UUID.",
 			},
-			"management_interface_config": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ForceNew:     true,
-				Description:  "Management interface configuration. Valid values: 'DHCP' and 'Static'.",
-				ValidateFunc: validation.StringInSlice([]string{"DHCP", "Static"}, false),
-			},
-			"lan_interface_ip_prefix": {
-				Type:        schema.TypeString,
-				Required:    true,
-				Description: "LAN interface IP/prefix.",
-			},
 			"management_egress_ip_prefix_list": {
-				Type:        schema.TypeList,
+				Type:        schema.TypeSet,
 				Optional:    true,
-				Description: "List of management egress gateway IP/prefix.",
+				Description: "Set of management egress gateway IP/prefix.",
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
@@ -88,19 +76,6 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 				ForceNew:    true,
 				Default:     false,
 				Description: "Enable management over private network.",
-			},
-			"management_interface_ip_prefix": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				ForceNew:    true,
-				Description: "Management interface IP/prefix.",
-			},
-			"management_default_gateway_ip": {
-				Type:         schema.TypeString,
-				Optional:     true,
-				ForceNew:     true,
-				Description:  "Management default gateway IP.",
-				ValidateFunc: validation.IsIPAddress,
 			},
 			"dns_server_ip": {
 				Type:         schema.TypeString,
@@ -136,14 +111,12 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 			"enable_edge_active_standby": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				ForceNew:    true,
 				Default:     false,
 				Description: "Enables Edge Active-Standby Mode.",
 			},
 			"enable_edge_active_standby_preemptive": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				ForceNew:    true,
 				Default:     false,
 				Description: "Enables Preemptive Mode for Edge Active-Standby, available only with Active-Standby enabled.",
 			},
@@ -218,12 +191,6 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 				Description:      "The longitude of the Edge as a Spoke.",
 				DiffSuppressFunc: goaviatrix.DiffSuppressFuncEdgeSpokeCoordinate,
 			},
-			"wan_public_ip": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Computed:    true,
-				Description: "WAN interface public IP.",
-			},
 			"rx_queue_size": {
 				Type:         schema.TypeString,
 				Optional:     true,
@@ -240,9 +207,6 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: "List of WAN interface names.",
-				DefaultFunc: func() (any, error) {
-					return []string{"eth0"}, nil
-				},
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
@@ -252,9 +216,6 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: "List of LAN interface names.",
-				DefaultFunc: func() (any, error) {
-					return []string{"eth1"}, nil
-				},
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
@@ -264,9 +225,6 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 				Optional:    true,
 				ForceNew:    true,
 				Description: "List of management interface names.",
-				DefaultFunc: func() (any, error) {
-					return []string{"eth2"}, nil
-				},
 				Elem: &schema.Schema{
 					Type: schema.TypeString,
 				},
@@ -274,7 +232,7 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 			"interfaces": {
 				Type:        schema.TypeSet,
 				Required:    true,
-				Description: "WAN/LAN interfaces.",
+				Description: "WAN/LAN/MANAGEMENT interfaces.",
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"name": {
@@ -283,14 +241,15 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 							Description: "Interface name.",
 						},
 						"type": {
-							Type:        schema.TypeString,
-							Required:    true,
-							Description: "Interface type.",
+							Type:         schema.TypeString,
+							Required:     true,
+							Description:  "Interface type.",
+							ValidateFunc: validation.StringInSlice([]string{"WAN", "LAN", "MANAGEMENT"}, false),
 						},
 						"bandwidth": {
 							Type:        schema.TypeInt,
 							Optional:    true,
-							Description: "Bandwidth.",
+							Description: "The rate of data can be moved through the interface, requires an integer value. Unit is in Mb/s.",
 						},
 						"enable_dhcp": {
 							Type:        schema.TypeBool,
@@ -407,6 +366,8 @@ func resourceAviatrixEdgeCSP() *schema.Resource {
 				Description: "Enable auto advertise LAN CIDRs.",
 			},
 		},
+		DeprecationMessage: "Since V3.1.1+, please use resource aviatrix_edge_zededa instead. Resource " +
+			"aviatrix_edge_csp will be deprecated in the V3.2.0 release.",
 	}
 }
 
@@ -418,12 +379,8 @@ func marshalEdgeCSPInput(d *schema.ResourceData) *goaviatrix.EdgeCSP {
 		ProjectUuid:                        d.Get("project_uuid").(string),
 		ComputeNodeUuid:                    d.Get("compute_node_uuid").(string),
 		TemplateUuid:                       d.Get("template_uuid").(string),
-		ManagementInterfaceConfig:          d.Get("management_interface_config").(string),
-		ManagementEgressIpPrefix:           strings.Join(getStringList(d, "management_egress_ip_prefix_list"), ","),
+		ManagementEgressIpPrefix:           strings.Join(getStringSet(d, "management_egress_ip_prefix_list"), ","),
 		EnableManagementOverPrivateNetwork: d.Get("enable_management_over_private_network").(bool),
-		LanInterfaceIpPrefix:               d.Get("lan_interface_ip_prefix").(string),
-		ManagementInterfaceIpPrefix:        d.Get("management_interface_ip_prefix").(string),
-		ManagementDefaultGatewayIp:         d.Get("management_default_gateway_ip").(string),
 		DnsServerIp:                        d.Get("dns_server_ip").(string),
 		SecondaryDnsServerIp:               d.Get("secondary_dns_server_ip").(string),
 		EnableEdgeActiveStandby:            d.Get("enable_edge_active_standby").(bool),
@@ -440,14 +397,12 @@ func marshalEdgeCSPInput(d *schema.ResourceData) *goaviatrix.EdgeCSP {
 		EnableJumboFrame:                   d.Get("enable_jumbo_frame").(bool),
 		Latitude:                           d.Get("latitude").(string),
 		Longitude:                          d.Get("longitude").(string),
-		WanPublicIp:                        d.Get("wan_public_ip").(string),
 		RxQueueSize:                        d.Get("rx_queue_size").(string),
 		WanInterface:                       strings.Join(getStringList(d, "wan_interface_names"), ","),
 		LanInterface:                       strings.Join(getStringList(d, "lan_interface_names"), ","),
 		MgmtInterface:                      strings.Join(getStringList(d, "management_interface_names"), ","),
 		DnsProfileName:                     d.Get("dns_profile_name").(string),
 		EnableSingleIpSnat:                 d.Get("enable_single_ip_snat").(bool),
-		EnableAutoAdvertiseLanCidrs:        d.Get("enable_auto_advertise_lan_cidrs").(bool),
 	}
 
 	interfaces := d.Get("interfaces").(*schema.Set).List()
@@ -491,6 +446,20 @@ func marshalEdgeCSPInput(d *schema.ResourceData) *goaviatrix.EdgeCSP {
 		edgeCSP.VlanList = append(edgeCSP.VlanList, v2)
 	}
 
+	if !edgeCSP.EnableEdgeActiveStandby {
+		edgeCSP.DisableEdgeActiveStandby = true
+	}
+
+	if !edgeCSP.EnableEdgeActiveStandbyPreemptive {
+		edgeCSP.DisableEdgeActiveStandbyPreemptive = true
+	}
+
+	if d.Get("enable_auto_advertise_lan_cidrs").(bool) {
+		edgeCSP.EnableAutoAdvertiseLanCidrs = "enable"
+	} else {
+		edgeCSP.EnableAutoAdvertiseLanCidrs = "disable"
+	}
+
 	return edgeCSP
 }
 
@@ -501,16 +470,6 @@ func resourceAviatrixEdgeCSPCreate(ctx context.Context, d *schema.ResourceData, 
 	edgeCSP := marshalEdgeCSPInput(d)
 
 	// checks before creation
-	if edgeCSP.ManagementInterfaceConfig == "DHCP" && (edgeCSP.ManagementInterfaceIpPrefix != "" || edgeCSP.ManagementDefaultGatewayIp != "" ||
-		edgeCSP.DnsServerIp != "" || edgeCSP.SecondaryDnsServerIp != "") {
-		return diag.Errorf("'management_interface_ip', 'management_default_gateway_ip', 'dns_server_ip' and 'secondary_dns_server_ip' are only valid when 'management_interface_config' is Static")
-	}
-
-	if edgeCSP.ManagementInterfaceConfig == "Static" && (edgeCSP.ManagementInterfaceIpPrefix == "" || edgeCSP.ManagementDefaultGatewayIp == "" ||
-		edgeCSP.DnsServerIp == "" || edgeCSP.SecondaryDnsServerIp == "") {
-		return diag.Errorf("'management_interface_ip', 'management_default_gateway_ip', 'dns_server_ip' and 'secondary_dns_server_ip' are required when 'management_interface_config' is Static")
-	}
-
 	if !edgeCSP.EnableEdgeActiveStandby && edgeCSP.EnableEdgeActiveStandbyPreemptive {
 		return diag.Errorf("could not configure Preemptive Mode with Active-Standby disabled")
 	}
@@ -638,16 +597,6 @@ func resourceAviatrixEdgeCSPCreate(ctx context.Context, d *schema.ResourceData, 
 		}
 	}
 
-	if edgeCSP.WanPublicIp != "" {
-		gatewayForEaasFunctions.LanInterfaceIpPrefix = edgeCSP.LanInterfaceIpPrefix
-		gatewayForEaasFunctions.ManagementEgressIpPrefix = edgeCSP.ManagementEgressIpPrefix
-		gatewayForEaasFunctions.WanPublicIp = edgeCSP.WanPublicIp
-		err := client.UpdateEdgeSpokeIpConfigurations(ctx, gatewayForEaasFunctions)
-		if err != nil {
-			return diag.Errorf("could not config WAN public IP after Edge CSP creation: %v", err)
-		}
-	}
-
 	if edgeCSP.RxQueueSize != "" {
 		gatewayForGatewayFunctions.RxQueueSize = edgeCSP.RxQueueSize
 		err := client.SetRxQueueSize(gatewayForGatewayFunctions)
@@ -656,18 +605,18 @@ func resourceAviatrixEdgeCSPCreate(ctx context.Context, d *schema.ResourceData, 
 		}
 	}
 
-	if len(edgeCSP.InterfaceList) != 0 || len(edgeCSP.VlanList) != 0 || edgeCSP.DnsProfileName != "" || !edgeCSP.EnableAutoAdvertiseLanCidrs {
-		err := client.UpdateEdgeCSP(ctx, edgeCSP)
-		if err != nil {
-			return diag.Errorf("could not config WAN/LAN/VLAN, DNS profile name or auto advertise LAN CIDRs after Edge CSP creation: %v", err)
-		}
-	}
-
 	if edgeCSP.EnableSingleIpSnat {
 		gatewayForGatewayFunctions.GatewayName = edgeCSP.GwName
 		err := client.EnableSNat(gatewayForGatewayFunctions)
 		if err != nil {
 			return diag.Errorf("failed to enable single IP SNAT: %s", err)
+		}
+	}
+
+	if edgeCSP.EnableAutoAdvertiseLanCidrs == "disable" {
+		err := client.UpdateEdgeCSP(ctx, edgeCSP)
+		if err != nil {
+			return diag.Errorf("could not disable auto advertise LAN CIDRs after Edge CSP creation: %v", err)
 		}
 	}
 
@@ -709,25 +658,19 @@ func resourceAviatrixEdgeCSPRead(ctx context.Context, d *schema.ResourceData, me
 	d.Set("compute_node_uuid", edgeCSPResp.ComputeNodeUuid)
 	d.Set("template_uuid", edgeCSPResp.TemplateUuid)
 	d.Set("enable_management_over_private_network", edgeCSPResp.EnableManagementOverPrivateNetwork)
-	d.Set("management_egress_ip_prefix_list", strings.Split(edgeCSPResp.ManagementEgressIpPrefix, ","))
-	d.Set("lan_interface_ip_prefix", edgeCSPResp.LanInterfaceIpPrefix)
-	d.Set("management_default_gateway_ip", edgeCSPResp.ManagementDefaultGatewayIp)
 	d.Set("dns_server_ip", edgeCSPResp.DnsServerIp)
 	d.Set("secondary_dns_server_ip", edgeCSPResp.SecondaryDnsServerIp)
-
-	if edgeCSPResp.Dhcp {
-		d.Set("management_interface_config", "DHCP")
-	} else {
-		d.Set("management_interface_config", "Static")
-		d.Set("management_interface_ip_prefix", edgeCSPResp.ManagementInterfaceIpPrefix)
-	}
-
 	d.Set("local_as_number", edgeCSPResp.LocalAsNumber)
 	d.Set("prepend_as_path", edgeCSPResp.PrependAsPath)
 	d.Set("enable_edge_active_standby", edgeCSPResp.EnableEdgeActiveStandby)
 	d.Set("enable_edge_active_standby_preemptive", edgeCSPResp.EnableEdgeActiveStandbyPreemptive)
-
 	d.Set("enable_learned_cidrs_approval", edgeCSPResp.EnableLearnedCidrsApproval)
+
+	if edgeCSPResp.ManagementEgressIpPrefix == "" {
+		d.Set("management_egress_ip_prefix_list", nil)
+	} else {
+		d.Set("management_egress_ip_prefix_list", strings.Split(edgeCSPResp.ManagementEgressIpPrefix, ","))
+	}
 
 	if edgeCSPResp.EnableLearnedCidrsApproval {
 		spokeAdvancedConfig, err := client.GetSpokeGatewayAdvancedConfig(&goaviatrix.SpokeVpc{GwName: edgeCSPResp.GwName})
@@ -756,14 +699,14 @@ func resourceAviatrixEdgeCSPRead(ctx context.Context, d *schema.ResourceData, me
 	d.Set("bgp_hold_time", edgeCSPResp.BgpHoldTime)
 	d.Set("enable_edge_transitive_routing", edgeCSPResp.EnableEdgeTransitiveRouting)
 	d.Set("enable_jumbo_frame", edgeCSPResp.EnableJumboFrame)
-	if edgeCSPResp.LatitudeReturn != 0 || edgeCSPResp.LongitudeReturn != 0 {
-		d.Set("latitude", fmt.Sprintf("%.6f", edgeCSPResp.LatitudeReturn))
-		d.Set("longitude", fmt.Sprintf("%.6f", edgeCSPResp.LongitudeReturn))
+	if edgeCSPResp.Latitude != 0 || edgeCSPResp.Longitude != 0 {
+		d.Set("latitude", fmt.Sprintf("%.6f", edgeCSPResp.Latitude))
+		d.Set("longitude", fmt.Sprintf("%.6f", edgeCSPResp.Longitude))
 	} else {
 		d.Set("latitude", "")
 		d.Set("longitude", "")
 	}
-	d.Set("wan_public_ip", edgeCSPResp.WanPublicIp)
+
 	d.Set("rx_queue_size", edgeCSPResp.RxQueueSize)
 	d.Set("state", edgeCSPResp.State)
 	d.Set("wan_interface_names", edgeCSPResp.WanInterface)
@@ -773,44 +716,42 @@ func resourceAviatrixEdgeCSPRead(ctx context.Context, d *schema.ResourceData, me
 	var interfaces []map[string]interface{}
 	var vlan []map[string]interface{}
 	for _, if0 := range edgeCSPResp.InterfaceList {
-		if if0.Type != "MANAGEMENT" {
-			if1 := make(map[string]interface{})
-			if1["name"] = if0.IfName
-			if1["type"] = if0.Type
-			if1["bandwidth"] = if0.Bandwidth
-			if1["wan_public_ip"] = if0.PublicIp
-			if1["tag"] = if0.Tag
-			if1["enable_dhcp"] = if0.Dhcp
-			if1["ip_address"] = if0.IpAddr
-			if1["gateway_ip"] = if0.GatewayIp
-			if1["dns_server_ip"] = if0.DnsPrimary
-			if1["secondary_dns_server_ip"] = if0.DnsSecondary
-			if1["vrrp_virtual_ip"] = if0.VirtualIp
+		if1 := make(map[string]interface{})
+		if1["name"] = if0.IfName
+		if1["type"] = if0.Type
+		if1["bandwidth"] = if0.Bandwidth
+		if1["wan_public_ip"] = if0.PublicIp
+		if1["tag"] = if0.Tag
+		if1["enable_dhcp"] = if0.Dhcp
+		if1["ip_address"] = if0.IpAddr
+		if1["gateway_ip"] = if0.GatewayIp
+		if1["dns_server_ip"] = if0.DnsPrimary
+		if1["secondary_dns_server_ip"] = if0.DnsSecondary
+		if1["vrrp_virtual_ip"] = if0.VirtualIp
 
-			if if0.Type == "LAN" {
-				if1["enable_vrrp"] = if0.VrrpState
-			}
-
-			if if0.Type == "LAN" && if0.SubInterfaces != nil {
-				for _, v0 := range if0.SubInterfaces {
-					v1 := make(map[string]interface{})
-					v1["parent_interface_name"] = v0.ParentInterface
-					v1["ip_address"] = v0.IpAddr
-					v1["gateway_ip"] = v0.GatewayIp
-					v1["peer_ip_address"] = v0.PeerIpAddr
-					v1["peer_gateway_ip"] = v0.PeerGatewayIp
-					v1["vrrp_virtual_ip"] = v0.VirtualIp
-					v1["tag"] = v0.Tag
-
-					vlanId, _ := strconv.Atoi(v0.VlanId)
-					v1["vlan_id"] = vlanId
-
-					vlan = append(vlan, v1)
-				}
-			}
-
-			interfaces = append(interfaces, if1)
+		if if0.Type == "LAN" {
+			if1["enable_vrrp"] = if0.VrrpState
 		}
+
+		if if0.Type == "LAN" && if0.SubInterfaces != nil {
+			for _, v0 := range if0.SubInterfaces {
+				v1 := make(map[string]interface{})
+				v1["parent_interface_name"] = v0.ParentInterface
+				v1["ip_address"] = v0.IpAddr
+				v1["gateway_ip"] = v0.GatewayIp
+				v1["peer_ip_address"] = v0.PeerIpAddr
+				v1["peer_gateway_ip"] = v0.PeerGatewayIp
+				v1["vrrp_virtual_ip"] = v0.VirtualIp
+				v1["tag"] = v0.Tag
+
+				vlanId, _ := strconv.Atoi(v0.VlanId)
+				v1["vlan_id"] = vlanId
+
+				vlan = append(vlan, v1)
+			}
+		}
+
+		interfaces = append(interfaces, if1)
 	}
 
 	if err = d.Set("interfaces", interfaces); err != nil {
@@ -822,7 +763,7 @@ func resourceAviatrixEdgeCSPRead(ctx context.Context, d *schema.ResourceData, me
 	}
 
 	d.Set("dns_profile_name", edgeCSPResp.DnsProfileName)
-	d.Set("enable_single_ip_snat", edgeCSPResp.SingleIpSnat)
+	d.Set("enable_single_ip_snat", edgeCSPResp.EnableNat == "yes" && edgeCSPResp.SnatMode == "primary")
 	d.Set("enable_auto_advertise_lan_cidrs", edgeCSPResp.EnableAutoAdvertiseLanCidrs)
 
 	d.SetId(edgeCSPResp.GwName)
@@ -836,6 +777,10 @@ func resourceAviatrixEdgeCSPUpdate(ctx context.Context, d *schema.ResourceData, 
 	edgeCSP := marshalEdgeCSPInput(d)
 
 	// checks before update
+	if !edgeCSP.EnableEdgeActiveStandby && edgeCSP.EnableEdgeActiveStandbyPreemptive {
+		return diag.Errorf("could not configure Preemptive Mode with Active-Standby disabled")
+	}
+
 	if !edgeCSP.EnableLearnedCidrsApproval && len(edgeCSP.ApprovedLearnedCidrs) != 0 {
 		return diag.Errorf("'approved_learned_cidrs' must be empty if 'enable_learned_cidrs_approval' is false")
 	}
@@ -869,17 +814,6 @@ func resourceAviatrixEdgeCSPUpdate(ctx context.Context, d *schema.ResourceData, 
 	}
 	gatewayForEaasFunctions := &goaviatrix.EdgeSpoke{
 		GwName: edgeCSP.GwName,
-	}
-
-	if d.HasChanges("management_egress_ip_prefix_list", "lan_interface_ip_prefix", "wan_public_ip") {
-		gatewayForEaasFunctions.LanInterfaceIpPrefix = edgeCSP.LanInterfaceIpPrefix
-		gatewayForEaasFunctions.ManagementEgressIpPrefix = edgeCSP.ManagementEgressIpPrefix
-		gatewayForEaasFunctions.WanPublicIp = edgeCSP.WanPublicIp
-
-		err := client.UpdateEdgeSpokeIpConfigurations(ctx, gatewayForEaasFunctions)
-		if err != nil {
-			return diag.Errorf("could not update IP configurations during Edge CSP update: %v", err)
-		}
 	}
 
 	if d.HasChanges("local_as_number", "prepend_as_path") {
@@ -1010,10 +944,13 @@ func resourceAviatrixEdgeCSPUpdate(ctx context.Context, d *schema.ResourceData, 
 		}
 	}
 
-	if d.HasChange("interfaces") || d.HasChange("vlan") || d.HasChange("dns_profile_name") || d.HasChange("enable_auto_advertise_lan_cidrs") {
+	if d.HasChanges("management_egress_ip_prefix_list", "interfaces", "vlan", "dns_profile_name",
+		"enable_auto_advertise_lan_cidrs", "enable_edge_active_standby", "enable_edge_active_standby_preemptive") {
 		err := client.UpdateEdgeCSP(ctx, edgeCSP)
 		if err != nil {
-			return diag.Errorf("could not update WAN/LAN/VLAN interfaces, DNS profile name or auto advertise LAN CIDRs during Edge CSP update: %v", err)
+			return diag.Errorf("could not update management egress ip prefix list, WAN/LAN/VLAN interfaces, "+
+				"DNS profile name, auto advertise LAN CIDRs, Edge active standby or Edge active standby preemptive "+
+				"during Edge CSP update: %v", err)
 		}
 	}
 

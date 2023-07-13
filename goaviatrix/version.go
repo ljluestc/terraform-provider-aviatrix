@@ -50,6 +50,29 @@ type VersionInfo struct {
 	Previous *AviatrixVersion
 }
 
+type PlatformUpgradeResp struct {
+	Return  bool                  `json:"return"`
+	Results PlatformUpgradeStatus `json:"results"`
+	Reason  string                `json:"reason"`
+}
+
+type PlatformUpgradeStatus struct {
+	PlatformUpgrade     PlatformUpgradeInfo `json:"platform_upgrade,omitempty"`
+	IsUpgradeInProgress bool                `json:"is_upgrade_in_progress,omitempty"`
+}
+
+type PlatformUpgradeInfo struct {
+	Progmsg string                `json:"progmsg,omitempty"`
+	Results PlatformUpgradeResult `json:"results,omitempty"`
+	Reason  string                `json:"reason,omitempty"`
+}
+
+type PlatformUpgradeResult struct {
+	Msg    string `json:"msg,omitempty"`
+	Reason string `json:"reason,omitempty"`
+	Status string `json:"status,omitempty"`
+}
+
 func (av *AviatrixVersion) String(includeBuild bool) string {
 	version := fmt.Sprintf("%d.%d", av.Major, av.Minor)
 	if av.MinorBuildID != "" {
@@ -76,6 +99,7 @@ func (c *Client) AsyncUpgrade(version *Version, upgradeGateways bool) error {
 		form["action"] = "upgrade_platform"
 		form["gateway_list"] = ""
 		form["software_version"] = version.Version
+		form["version"] = version.Version
 	}
 	resp, err := c.Post(c.baseURL, form)
 	if err != nil {
@@ -97,11 +121,12 @@ func (c *Client) AsyncUpgrade(version *Version, upgradeGateways bool) error {
 		return fmt.Errorf("rest API %s POST failed to initiate async action: %s", form["action"], data.Reason)
 	}
 
-	requestID := data.Result
-	form1 := map[string]string{
-		"action":     "check_task_status",
-		"CID":        c.CID,
-		"request_id": requestID,
+	time.Sleep(time.Second * 90)
+
+	form1 := map[string]interface{}{
+		"action":        "platform_upgrade_status",
+		"CID":           c.CID,
+		"platform_only": true,
 	}
 
 	const maxPoll = 180
@@ -114,27 +139,32 @@ func (c *Client) AsyncUpgrade(version *Version, upgradeGateways bool) error {
 			time.Sleep(sleepDuration)
 			continue
 		}
+		var data1 PlatformUpgradeResp
 		buf = new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
-		err = json.Unmarshal(buf.Bytes(), &data)
+		err = json.Unmarshal(buf.Bytes(), &data1)
 		if err != nil {
-			return fmt.Errorf("decode check_task_status failed: %v\n Body: %s", err, buf.String())
-		}
-		if !data.Return {
-			if data.Reason != "REQUEST_IN_PROGRESS" {
-				return fmt.Errorf("rest API %s POST failed: %s", form["action"], data.Reason)
+			if strings.Contains(buf.String(), "503 Service Unavailable") || strings.Contains(buf.String(), "502 Proxy Error") {
+				time.Sleep(sleepDuration)
+				continue
 			}
-
-			// Not done yet
+			return fmt.Errorf("decode platform_upgrade_status failed: %v\n Body: %s", err, buf.String())
+		}
+		if !data1.Return {
+			return fmt.Errorf("rest API %s POST failed to initiate async action: %s", form1["action"], data1.Reason)
+		}
+		if data1.Results.IsUpgradeInProgress {
 			time.Sleep(sleepDuration)
 			continue
 		}
-
-		// Upgrade is done, check for error
-		if strings.HasPrefix(data.Result, "Error") {
-			return fmt.Errorf("post check_task_status failed: %s", data.Result)
+		if data1.Results.PlatformUpgrade.Results.Status == "complete" {
+			c.Login()
+			return nil
+		} else if data1.Results.PlatformUpgrade.Results.Status == "in progress" {
+			time.Sleep(sleepDuration)
+			continue
 		}
-		break
+		return fmt.Errorf(data1.Results.PlatformUpgrade.Results.Reason)
 	}
 	// Waited for too long and upgrade never finished
 	if i == maxPoll {

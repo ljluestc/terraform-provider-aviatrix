@@ -5,18 +5,20 @@ package goaviatrix
 
 // Cloud provider ids
 const (
-	AWS        = 1
-	GCP        = 4
-	Azure      = 8
-	OCI        = 16
-	AzureGov   = 32
-	AWSGov     = 256
-	AWSChina   = 1024
-	AzureChina = 2048
-	AliCloud   = 8192
-	AWSTS      = 16384 // AWS Top Secret Region (C2S)
-	AWSS       = 32768 // AWS Secret Region (SC2S)
-	EDGECSP    = 65536
+	AWS         = 1
+	GCP         = 4
+	Azure       = 8
+	OCI         = 16
+	AzureGov    = 32
+	AWSGov      = 256
+	AWSChina    = 1024
+	AzureChina  = 2048
+	AliCloud    = 8192
+	AWSTS       = 16384 // AWS Top Secret Region (C2S)
+	AWSS        = 32768 // AWS Secret Region (SC2S)
+	EDGECSP     = 65536
+	EDGEEQUINIX = 524288
+	EDGENEO     = 262144
 )
 
 // Cloud vendor names
@@ -36,12 +38,13 @@ const (
 
 // GetSupportedClouds returns the list of currently supported cloud IDs
 // Example usage to validate a cloud_type attribute in a schema:
-// "cloud_type": {
-//     Type:     schema.TypeInt,
-//     Optional: true,
-//     Description: "Cloud Provider ID",
-//     ValidateFunc: validation.IntInSlice(cloud.GetSupportedClouds()),
-// }
+//
+//	"cloud_type": {
+//	    Type:     schema.TypeInt,
+//	    Optional: true,
+//	    Description: "Cloud Provider ID",
+//	    ValidateFunc: validation.IntInSlice(cloud.GetSupportedClouds()),
+//	}
 func GetSupportedClouds() []int {
 	return []int{
 		AWS,
@@ -56,10 +59,12 @@ func GetSupportedClouds() []int {
 		AWSTS,
 		AWSS,
 		EDGECSP,
+		EDGEEQUINIX,
+		EDGENEO,
 	}
 }
 
-// Convert vendor name to cloud_type
+// VendorToCloudType Convert vendor name to cloud_type
 func VendorToCloudType(vendor string) int {
 	switch vendor {
 	case "AWS":

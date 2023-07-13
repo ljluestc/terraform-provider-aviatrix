@@ -2,6 +2,7 @@ package goaviatrix
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -13,7 +14,7 @@ type CloudnTransitGatewayAttachment struct {
 	TransitGatewayBgpAsn             string `form:"bgp_local_as_number" json:"bgp_local_asn_number"`
 	CloudnBgpAsn                     string `form:"external_device_as_number" json:"bgp_remote_asn_number"`
 	CloudnLanInterfaceNeighborIP     string `json:"cloudn_neighbor_ip"`
-	CloudnLanInterfaceNeighborBgpAsn string `json:"cloudn_neighbor_as_number"`
+	CloudnLanInterfaceNeighborBgpAsn int    `json:"cloudn_neighbor_as_number"`
 	CloudnNeighbor                   string `form:"cloudn_neighbor"`
 	EnableOverPrivateNetwork         bool   `form:"direct_connect" json:"direct_connect_primary"`
 	EnableJumboFrame                 bool   `json:"jumbo_frame"`
@@ -22,8 +23,7 @@ type CloudnTransitGatewayAttachment struct {
 	RoutingProtocol                  string   `form:"routing_protocol"`
 	Action                           string   `form:"action"`
 	CID                              string   `form:"CID"`
-	EnableLearnedCidrsApproval       bool     `form:"connection_learned_cidrs_approval"`
-	EnableLearnedCidrsApprovalValue  string   `json:"conn_learned_cidrs_approval"`
+	EnableLearnedCidrsApproval       string   `form:"conn_learned_cidrs_approval" json:"conn_learned_cidrs_approval"`
 	ApprovedCidrs                    []string `json:"conn_approved_learned_cidrs"`
 	PrependAsPath                    string   `json:"conn_bgp_prepend_as_path"`
 	Async                            bool     `form:"async,omitempty"`
@@ -33,8 +33,21 @@ func (c *Client) CreateCloudnTransitGatewayAttachment(ctx context.Context, attac
 	attachment.Action = "attach_cloudwan_device_to_transit_gateway"
 	attachment.CID = c.CID
 	attachment.RoutingProtocol = "bgp"
-	attachment.CloudnNeighbor = `"[{"ip_addr": ` + attachment.CloudnLanInterfaceNeighborIP + `, "as_num": ` + attachment.CloudnLanInterfaceNeighborBgpAsn + `}]"`
 	attachment.Async = true
+
+	type CloudnNeighbor struct {
+		IpAddr string `json:"ip_addr"`
+		AsNum  int    `json:"as_num"`
+	}
+
+	cloudnNeighbor := CloudnNeighbor{
+		IpAddr: attachment.CloudnLanInterfaceNeighborIP,
+		AsNum:  attachment.CloudnLanInterfaceNeighborBgpAsn,
+	}
+
+	cloudnNeighborJson, _ := json.Marshal(cloudnNeighbor)
+	attachment.CloudnNeighbor = "[" + string(cloudnNeighborJson) + "]"
+
 	return c.PostAsyncAPIContext(ctx, attachment.Action, attachment, BasicCheck)
 }
 
@@ -89,7 +102,6 @@ func (c *Client) GetCloudnTransitGatewayAttachment(ctx context.Context, connName
 	data.Results.Connections.ConnectionName = connName
 	data.Results.Connections.DeviceName = deviceName
 	data.Results.Connections.EnableDeadPeerDetection = data.Results.Connections.DpdConfig == "enable"
-	data.Results.Connections.EnableLearnedCidrsApproval = data.Results.Connections.EnableLearnedCidrsApprovalValue == "yes"
 
 	return &data.Results.Connections, nil
 }

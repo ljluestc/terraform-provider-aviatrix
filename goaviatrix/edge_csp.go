@@ -16,46 +16,43 @@ type EdgeCSP struct {
 	ProjectUuid                        string `json:"project_uuid,omitempty"`
 	ComputeNodeUuid                    string `json:"compute_node_uuid,omitempty"`
 	TemplateUuid                       string `json:"template_uuid,omitempty"`
-	ManagementInterfaceConfig          string
 	ManagementEgressIpPrefix           string `json:"mgmt_egress_ip,omitempty"`
 	EnableManagementOverPrivateNetwork bool   `json:"mgmt_over_private_network,omitempty"`
-	LanInterfaceIpPrefix               string `json:"lan_ip,omitempty"`
-	ManagementInterfaceIpPrefix        string `json:"mgmt_ip,omitempty"`
-	ManagementDefaultGatewayIp         string `json:"mgmt_default_gateway,omitempty"`
 	DnsServerIp                        string `json:"dns_server_ip,omitempty"`
 	SecondaryDnsServerIp               string `json:"dns_server_ip_secondary,omitempty"`
 	Dhcp                               bool   `json:"dhcp,omitempty"`
-	EnableEdgeActiveStandby            bool   `json:"enable_active_standby"`
-	EnableEdgeActiveStandbyPreemptive  bool   `json:"enable_active_standby_preemptive"`
-	LocalAsNumber                      string `json:"local_as_number"`
+	EnableEdgeActiveStandby            bool   `json:"enable_active_standby,omitempty"`
+	DisableEdgeActiveStandby           bool   `json:"disable_active_standby,omitempty"`
+	EnableEdgeActiveStandbyPreemptive  bool   `json:"enable_active_standby_preemptive,omitempty"`
+	DisableEdgeActiveStandbyPreemptive bool   `json:"disable_active_standby_preemptive,omitempty"`
+	LocalAsNumber                      string `json:"local_as_number,omitempty"`
 	PrependAsPath                      []string
-	PrependAsPathReturn                string   `json:"prepend_as_path"`
-	IncludeCidrList                    []string `json:"include_cidr_list"`
-	EnableLearnedCidrsApproval         bool     `json:"enable_learned_cidrs_approval"`
+	PrependAsPathReturn                string   `json:"prepend_as_path,omitempty"`
+	IncludeCidrList                    []string `json:"include_cidr_list,omitempty"`
+	EnableLearnedCidrsApproval         bool     `json:"enable_learned_cidrs_approval,omitempty"`
 	ApprovedLearnedCidrs               []string `json:"approved_learned_cidrs,omitempty"`
-	SpokeBgpManualAdvertisedCidrs      []string `json:"bgp_manual_spoke_advertise_cidrs"`
-	EnablePreserveAsPath               bool     `json:"preserve_as_path"`
-	BgpPollingTime                     int      `json:"bgp_polling_time"`
-	BgpHoldTime                        int      `json:"bgp_hold_time"`
-	EnableEdgeTransitiveRouting        bool     `json:"edge_transitive_routing"`
-	EnableJumboFrame                   bool     `json:"jumbo_frame"`
+	SpokeBgpManualAdvertisedCidrs      []string `json:"bgp_manual_spoke_advertise_cidrs,omitempty"`
+	EnablePreserveAsPath               bool     `json:"preserve_as_path,omitempty"`
+	BgpPollingTime                     int      `json:"bgp_polling_time,omitempty"`
+	BgpHoldTime                        int      `json:"bgp_hold_time,omitempty"`
+	EnableEdgeTransitiveRouting        bool     `json:"edge_transitive_routing,omitempty"`
+	EnableJumboFrame                   bool     `json:"jumbo_frame,omitempty"`
 	Latitude                           string
 	Longitude                          string
-	LatitudeReturn                     float64 `json:"latitude"`
-	LongitudeReturn                    float64 `json:"longitude"`
-	WanPublicIp                        string  `json:"wan_discovery_ip"`
-	PrivateIP                          string  `json:"private_ip"`
-	RxQueueSize                        string  `json:"rx_queue_size"`
-	State                              string  `json:"vpc_state"`
-	NoProgressBar                      bool    `json:"no_progress_bar,omitempty"`
-	WanInterface                       string  `json:"wan_ifname"`
-	LanInterface                       string  `json:"lan_ifname"`
-	MgmtInterface                      string  `json:"mgmt_ifname"`
+	RxQueueSize                        string `json:"rx_queue_size,omitempty"`
+	State                              string `json:"vpc_state,omitempty"`
+	NoProgressBar                      bool   `json:"no_progress_bar,omitempty"`
+	WanInterface                       string `json:"wan_ifname,omitempty"`
+	LanInterface                       string `json:"lan_ifname,omitempty"`
+	MgmtInterface                      string `json:"mgmt_ifname,omitempty"`
 	InterfaceList                      []*Interface
+	Interfaces                         string `json:"interfaces,omitempty"`
 	VlanList                           []*Vlan
-	DnsProfileName                     string `json:"dns_profile_name"`
+	Vlan                               string `json:"vlan,omitempty"`
+	DnsProfileName                     string `json:"dns_profile_name,omitempty"`
 	EnableSingleIpSnat                 bool
-	EnableAutoAdvertiseLanCidrs        bool
+	EnableAutoAdvertiseLanCidrs        string `json:"auto_advertise_lan_cidrs,omitempty"`
+	LanInterfaceIpPrefix               string
 }
 
 type Interface struct {
@@ -106,20 +103,18 @@ type EdgeCSPResp struct {
 	EnableEdgeActiveStandbyPreemptive  bool   `json:"edge_active_standby_preemptive"`
 	LocalAsNumber                      string `json:"local_as_number"`
 	PrependAsPath                      []string
-	PrependAsPathReturn                string   `json:"prepend_as_path"`
-	IncludeCidrList                    []string `json:"include_cidr_list"`
-	EnableLearnedCidrsApproval         bool     `json:"enable_learned_cidrs_approval"`
-	ApprovedLearnedCidrs               []string `json:"approved_learned_cidrs,omitempty"`
-	SpokeBgpManualAdvertisedCidrs      []string `json:"bgp_manual_spoke_advertise_cidrs"`
-	EnablePreserveAsPath               bool     `json:"preserve_as_path"`
-	BgpPollingTime                     int      `json:"bgp_polling_time"`
-	BgpHoldTime                        int      `json:"bgp_hold_time"`
-	EnableEdgeTransitiveRouting        bool     `json:"edge_transitive_routing"`
-	EnableJumboFrame                   bool     `json:"jumbo_frame"`
-	Latitude                           string
-	Longitude                          string
-	LatitudeReturn                     float64      `json:"latitude"`
-	LongitudeReturn                    float64      `json:"longitude"`
+	PrependAsPathReturn                string       `json:"prepend_as_path"`
+	IncludeCidrList                    []string     `json:"include_cidr_list"`
+	EnableLearnedCidrsApproval         bool         `json:"enable_learned_cidrs_approval"`
+	ApprovedLearnedCidrs               []string     `json:"approved_learned_cidrs,omitempty"`
+	SpokeBgpManualAdvertisedCidrs      []string     `json:"bgp_manual_spoke_advertise_cidrs"`
+	EnablePreserveAsPath               bool         `json:"preserve_as_path"`
+	BgpPollingTime                     int          `json:"bgp_polling_time"`
+	BgpHoldTime                        int          `json:"bgp_hold_time"`
+	EnableEdgeTransitiveRouting        bool         `json:"edge_transitive_routing"`
+	EnableJumboFrame                   bool         `json:"jumbo_frame"`
+	Latitude                           float64      `json:"latitude"`
+	Longitude                          float64      `json:"longitude"`
 	WanPublicIp                        string       `json:"public_ip"`
 	PrivateIP                          string       `json:"private_ip"`
 	RxQueueSize                        string       `json:"rx_queue_size"`
@@ -129,7 +124,8 @@ type EdgeCSPResp struct {
 	MgmtInterface                      []string     `json:"edge_csp_mgmt_ifname"`
 	InterfaceList                      []*Interface `json:"interfaces"`
 	DnsProfileName                     string       `json:"dns_profile_name"`
-	SingleIpSnat                       bool         `json:"nat_enabled"`
+	EnableNat                          string       `json:"enable_nat"`
+	SnatMode                           string       `json:"snat_target"`
 	EnableAutoAdvertiseLanCidrs        bool         `json:"auto_advertise_lan_cidrs"`
 }
 
@@ -144,11 +140,25 @@ func (c *Client) CreateEdgeCSP(ctx context.Context, edgeCSP *EdgeCSP) error {
 	edgeCSP.CID = c.CID
 	edgeCSP.NoProgressBar = true
 
-	if edgeCSP.ManagementInterfaceConfig == "DHCP" {
-		edgeCSP.Dhcp = true
+	interfaces, err := json.Marshal(edgeCSP.InterfaceList)
+	if err != nil {
+		return err
 	}
 
-	err := c.PostAPIContext2(ctx, nil, edgeCSP.Action, edgeCSP, BasicCheck)
+	edgeCSP.Interfaces = b64.StdEncoding.EncodeToString(interfaces)
+
+	if edgeCSP.VlanList == nil || len(edgeCSP.VlanList) == 0 {
+		edgeCSP.VlanList = []*Vlan{}
+	}
+
+	vlan, err := json.Marshal(edgeCSP.VlanList)
+	if err != nil {
+		return err
+	}
+
+	edgeCSP.Vlan = b64.StdEncoding.EncodeToString(vlan)
+
+	err = c.PostAPIContext2(ctx, nil, edgeCSP.Action, edgeCSP, BasicCheck)
 	if err != nil {
 		return err
 	}
@@ -198,18 +208,15 @@ func (c *Client) DeleteEdgeCSP(ctx context.Context, accountName, name string) er
 }
 
 func (c *Client) UpdateEdgeCSP(ctx context.Context, edgeCSP *EdgeCSP) error {
-	form := map[string]string{
-		"action": "update_edge_gateway",
-		"CID":    c.CID,
-		"name":   edgeCSP.GwName,
-	}
+	edgeCSP.Action = "update_edge_gateway"
+	edgeCSP.CID = c.CID
 
 	interfaces, err := json.Marshal(edgeCSP.InterfaceList)
 	if err != nil {
 		return err
 	}
 
-	form["interfaces"] = b64.StdEncoding.EncodeToString(interfaces)
+	edgeCSP.Interfaces = b64.StdEncoding.EncodeToString(interfaces)
 
 	if edgeCSP.VlanList == nil || len(edgeCSP.VlanList) == 0 {
 		edgeCSP.VlanList = []*Vlan{}
@@ -220,17 +227,7 @@ func (c *Client) UpdateEdgeCSP(ctx context.Context, edgeCSP *EdgeCSP) error {
 		return err
 	}
 
-	form["vlan"] = b64.StdEncoding.EncodeToString(vlan)
+	edgeCSP.Vlan = b64.StdEncoding.EncodeToString(vlan)
 
-	if edgeCSP.DnsProfileName != "" {
-		form["dns_profile_name"] = edgeCSP.DnsProfileName
-	}
-
-	if edgeCSP.EnableAutoAdvertiseLanCidrs {
-		form["auto_advertise_lan_cidrs"] = "enable"
-	} else {
-		form["auto_advertise_lan_cidrs"] = "disable"
-	}
-
-	return c.PostAPIContext2(ctx, nil, form["action"], form, BasicCheck)
+	return c.PostAPIContext2(ctx, nil, edgeCSP.Action, edgeCSP, BasicCheck)
 }

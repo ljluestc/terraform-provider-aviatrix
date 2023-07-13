@@ -315,7 +315,10 @@ The following arguments are supported:
 
 ### BGP over LAN
 * `enable_bgp_over_lan` - (Optional) Pre-allocate a network interface(eth4) for "BGP over LAN" functionality. Must be enabled to create a BGP over LAN `aviatrix_spoke_external_device_conn` resource with this Spoke Gateway. Only valid for 8 (Azure), 32 (AzureGov) or AzureChina (2048). Valid values: true or false. Default value: false. Available as of provider version R3.0.2+.
-* `bgp_lan_interfaces_count` - (Optional) (Optional) Number of interfaces that will be created for BGP over LAN enabled Azure spoke. Default value: 1. Available as of provider version R3.0.2+.
+
+-> **NOTE:** Default value of `bgp_lan_interfaces_count` has been removed as of Aviatrix Terraform Provider R3.1.0. If you are using/upgraded to Aviatrix Terraform Provider R3.1.0+, and a BGP over LAN enabled Azure **spoke_gateway** resource was originally created with a provider version <R3.1.0 with `bgp_lan_interfaces_count` not set, you must paste "bgp_lan_interfaces_count = 1" into the corresponding **spoke_gateway** resource to avoid ‘terraform plan‘ from showing delta.
+
+* `bgp_lan_interfaces_count` - (Optional) Number of interfaces that will be created for BGP over LAN enabled Azure spoke. Applies on HA Transit as well if enabled. Available as of provider version R3.0.2+.
 
 ### Encryption
 * `enable_encrypt_volume` - (Optional) Enable EBS volume encryption for Gateway. Only supports AWS, AWSGov, AWSChina, AWS Top Secret and AWS Secret providers. Valid values: true, false. Default value: false.
@@ -368,6 +371,7 @@ The following arguments are supported:
 * `enable_vpc_dns_server` - (Optional) Enable VPC DNS Server for Gateway. Currently only supported for AWS, Azure, AzureGov, AWSGov, AWSChina, AzureChina, Alibaba Cloud, AWS Top Secret and AWS Secret gateways. Valid values: true, false. Default value: false.
 * `zone` - (Optional) Availability Zone. Only available for Azure (8), Azure GOV (32) and Azure CHINA (2048). Must be in the form 'az-n', for example, 'az-2'. Available in provider version R2.17+.
 * `enable_jumbo_frame` - (Optional) Enable jumbo frames for this spoke gateway. Default value is true.
+* `enable_gro_gso` - (Optional) Enable GRO/GSO for this spoke gateway. Default value is true. Available in provider R3.1.0+.
 * `tags` - (Optional) Map of tags to assign to the gateway. Only available for AWS, Azure, AzureGov, AWSGov, AWSChina, AzureChina, AWS Top Secret and AWS Secret gateways. Allowed characters vary by cloud type but always include: letters, spaces, and numbers. AWS, AWSGov, AWSChina, AWS Top Secret and AWS Secret allow the use of any character. Azure, AzureGov and AzureChina allows the following special characters: + - = . _ : @. Example: {"key1" = "value1", "key2" = "value2"}.
 * `tunnel_detection_time` - (Optional) The IPsec tunnel down detection time for the Spoke Gateway in seconds. Must be a number in the range [20-600]. The default value is set by the controller (60 seconds if nothing has been changed). **NOTE: The controller UI has an option to set the tunnel detection time for all gateways. To achieve the same functionality in Terraform, use the same TF_VAR to manage the tunnel detection time for all gateways.** Available in provider R2.19+.
 * `enable_bgp` - (Optional) Enable BGP for this spoke gateway. Only available for AWS and Azure. Valid values: true, false. Default value: false. Available in provider R2.21.0+.
@@ -375,6 +379,9 @@ The following arguments are supported:
 * `private_mode_lb_vpc_id` - (Optional) VPC ID of Private Mode load balancer. Required when Private Mode is enabled on the Controller. Available in provider version R2.23+.
 * `private_mode_subnet_zone` - (Optional) Availability Zone of the subnet. Required when Private Mode is enabled on the Controller and `cloud_type` is AWS or AWSGov. Available in Provider version R2.23+.
 * `ha_private_mode_subnet_zone` - (Optional) Availability Zone of the HA subnet. Required when Private Mode is enabled on the Controller and `cloud_type` is AWS or AWSGov with HA. Available in Provider version R2.23+.
+  
+!> **WARNING:** Aviatrix released the Global VPC feature in Preview mode. Preview features are not safe for deployment in production environments.
+* `enable_global_vpc` - (Optional) Enable global VPC. Only supported for GCP spoke gateways. Valid values: true, false. Default value: false.
 
 ## Attribute Reference
 

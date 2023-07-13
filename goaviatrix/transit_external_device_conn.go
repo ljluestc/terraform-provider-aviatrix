@@ -51,6 +51,7 @@ type ExternalDeviceConn struct {
 	BackupLocalLanIP       string `form:"backup_local_lan_ip,omitempty"`
 	EventTriggeredHA       bool
 	EnableJumboFrame       bool
+	Phase1LocalIdentifier  string
 	Phase1RemoteIdentifier string
 	PrependAsPath          string
 	BgpMd5Key              string `form:"bgp_md5_key,omitempty"`
@@ -58,6 +59,7 @@ type ExternalDeviceConn struct {
 	AuthType               string `form:"auth_type,omitempty"`
 	EnableEdgeUnderlay     bool   `form:"edge_underlay,omitempty"`
 	RemoteCloudType        string `form:"remote_cloud_type,omitempty"`
+	BgpMd5KeyChanged       bool   `form:"bgp_md5_key_changed,omitempty"`
 }
 
 type EditExternalDeviceConnDetail struct {
@@ -82,22 +84,23 @@ type EditExternalDeviceConnDetail struct {
 	EnableEdgeSegmentation bool          `json:"enable_edge_segmentation,omitempty"`
 	Tunnels                []TunnelInfo  `json:"tunnels,omitempty"`
 	ActiveActiveHA         string        `json:"active_active_ha,omitempty"`
-	ManualBGPCidrs         []string      `json:"conn_bgp_manual_advertise_cidrs"`
+	ManualBGPCidrs         []string      `json:"conn_bgp_manual_advertise_cidrs,omitempty"`
 	BackupRemoteGatewayIP  string
 	PreSharedKey           string
 	BackupPreSharedKey     string
-	IkeVer                 string `json:"ike_ver"`
-	PeerVnetId             string `json:"peer_vnet_id"`
-	RemoteLanIP            string `json:"remote_lan_ip"`
-	LocalLanIP             string `json:"local_lan_ip"`
-	BackupRemoteLanIP      string `json:"backup_remote_lan_ip"`
-	BackupLocalLanIP       string `json:"backup_local_lan_ip"`
-	EventTriggeredHA       string `json:"event_triggered_ha"`
-	Phase1RemoteIdentifier string `json:"phase1_remote_id"`
-	PrependAsPath          string `json:"conn_bgp_prepend_as_path"`
+	IkeVer                 string `json:"ike_ver,omitempty"`
+	PeerVnetId             string `json:"peer_vnet_id,omitempty"`
+	RemoteLanIP            string `json:"remote_lan_ip,omitempty"`
+	LocalLanIP             string `json:"local_lan_ip,omitempty"`
+	BackupRemoteLanIP      string `json:"backup_remote_lan_ip,omitempty"`
+	BackupLocalLanIP       string `json:"backup_local_lan_ip,omitempty"`
+	EventTriggeredHA       string `json:"event_triggered_ha,omitempty"`
+	Phase1LocalIdentifier  string `json:"ph1_identifier,omitempty"`
+	Phase1RemoteIdentifier string `json:"phase1_remote_id,omitempty"`
+	PrependAsPath          string `json:"conn_bgp_prepend_as_path,omitempty"`
 	EnableJumboFrame       bool   `json:"jumbo_frame,omitempty"`
-	WanUnderlay            bool   `json:"wan_underlay"`
-	RemoteCloudType        string `json:"remote_cloud_type"`
+	WanUnderlay            bool   `json:"wan_underlay,omitempty"`
+	RemoteCloudType        string `json:"remote_cloud_type,omitempty"`
 }
 
 type EditBgpMd5Key struct {
@@ -299,6 +302,7 @@ func (c *Client) GetExternalDeviceConnDetail(externalDeviceConn *ExternalDeviceC
 		externalDeviceConn.PrependAsPath = externalDeviceConnDetail.PrependAsPath
 		externalDeviceConn.EnableEdgeUnderlay = externalDeviceConnDetail.WanUnderlay
 		externalDeviceConn.RemoteCloudType = externalDeviceConnDetail.RemoteCloudType
+		externalDeviceConn.Phase1LocalIdentifier = externalDeviceConnDetail.Phase1LocalIdentifier
 
 		return externalDeviceConn, nil
 	}
@@ -418,4 +422,194 @@ func (c *Client) DisableJumboFrameExternalDeviceConn(externalDeviceConn *Externa
 	}
 
 	return c.PostAPI(externalDeviceConn.Action, params, checkFunc)
+}
+
+func (c *Client) GetEdgeExternalDeviceConnDetail(externalDeviceConn *ExternalDeviceConn) (*ExternalDeviceConn, error) {
+	params := map[string]string{
+		"CID":       c.CID,
+		"action":    "get_site2cloud_conn_detail",
+		"conn_name": externalDeviceConn.ConnectionName,
+		"vpc_id":    externalDeviceConn.VpcID,
+	}
+	checkFunc := func(action, method, reason string, ret bool) error {
+		if !ret {
+			if strings.Contains(reason, "does not exist") {
+				return ErrNotFound
+			}
+			return fmt.Errorf("rest API %s %s failed: %s", action, method, reason)
+		}
+		return nil
+	}
+	var data ExternalDeviceConnDetailResp
+	err := c.GetAPI(&data, params["action"], params, checkFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	externalDeviceConnDetail := data.Results.Connections
+	if len(externalDeviceConnDetail.ConnectionName) != 0 {
+		inputGwName := externalDeviceConn.GwName
+
+		if len(externalDeviceConnDetail.VpcID) != 0 {
+			externalDeviceConn.VpcID = externalDeviceConnDetail.VpcID[0]
+		}
+
+		externalDeviceConn.ConnectionName = externalDeviceConnDetail.ConnectionName[0]
+		externalDeviceConn.GwName = externalDeviceConnDetail.GwName
+
+		if externalDeviceConnDetail.BgpStatus == "enabled" || externalDeviceConnDetail.BgpStatus == "Enabled" {
+			bgpLocalAsNumber, _ := strconv.Atoi(externalDeviceConnDetail.BgpLocalAsNum)
+			externalDeviceConn.BgpLocalAsNum = bgpLocalAsNumber
+			bgpRemoteAsNumber, _ := strconv.Atoi(externalDeviceConnDetail.BgpRemoteAsNum)
+			externalDeviceConn.BgpRemoteAsNum = bgpRemoteAsNumber
+			externalDeviceConn.ConnectionType = "bgp"
+			if len(externalDeviceConnDetail.Tunnels) >= 1 {
+				tunnelProtocol := externalDeviceConnDetail.Tunnels[0].TunnelProtocol
+				// LAN tunnel protocol is defined in the backend as "N/A(LAN)".
+				// Here we clean that up to be just "LAN" for Terraform users.
+				if strings.Contains(tunnelProtocol, "LAN") {
+					tunnelProtocol = "LAN"
+				}
+				externalDeviceConn.TunnelProtocol = tunnelProtocol
+			}
+		} else {
+			externalDeviceConn.RemoteSubnet = externalDeviceConnDetail.RemoteSubnet
+			externalDeviceConn.ConnectionType = "static"
+		}
+		externalDeviceConn.RemoteGatewayIP = strings.Split(externalDeviceConnDetail.RemoteGatewayIP, ",")[0]
+
+		// GRE and LAN tunnels cannot set Algorithms
+		if externalDeviceConn.TunnelProtocol != "GRE" && externalDeviceConn.TunnelProtocol != "LAN" {
+			if externalDeviceConnDetail.Algorithm.Phase1Auth[0] == "SHA-256" &&
+				externalDeviceConnDetail.Algorithm.Phase2Auth[0] == "HMAC-SHA-256" &&
+				externalDeviceConnDetail.Algorithm.Phase1DhGroups[0] == "14" &&
+				externalDeviceConnDetail.Algorithm.Phase2DhGroups[0] == "14" &&
+				externalDeviceConnDetail.Algorithm.Phase1Encrption[0] == "AES-256-CBC" &&
+				externalDeviceConnDetail.Algorithm.Phase2Encrption[0] == "AES-256-CBC" {
+				externalDeviceConn.CustomAlgorithms = false
+				externalDeviceConn.Phase1Auth = ""
+				externalDeviceConn.Phase2Auth = ""
+				externalDeviceConn.Phase1DhGroups = ""
+				externalDeviceConn.Phase2DhGroups = ""
+				externalDeviceConn.Phase1Encryption = ""
+				externalDeviceConn.Phase2Encryption = ""
+			} else {
+				externalDeviceConn.CustomAlgorithms = true
+				externalDeviceConn.Phase1Auth = externalDeviceConnDetail.Algorithm.Phase1Auth[0]
+				externalDeviceConn.Phase2Auth = externalDeviceConnDetail.Algorithm.Phase2Auth[0]
+				externalDeviceConn.Phase1DhGroups = externalDeviceConnDetail.Algorithm.Phase1DhGroups[0]
+				externalDeviceConn.Phase2DhGroups = externalDeviceConnDetail.Algorithm.Phase2DhGroups[0]
+				externalDeviceConn.Phase1Encryption = externalDeviceConnDetail.Algorithm.Phase1Encrption[0]
+				externalDeviceConn.Phase2Encryption = externalDeviceConnDetail.Algorithm.Phase2Encrption[0]
+			}
+		}
+
+		if externalDeviceConnDetail.DirectConnect {
+			externalDeviceConn.DirectConnect = "enabled"
+		} else {
+			externalDeviceConn.DirectConnect = "disabled"
+		}
+
+		backupBgpRemoteAsNumber := 0
+		if externalDeviceConnDetail.BackupBgpRemoteAsNum != "" {
+			backupBgpRemoteAsNumberRead, _ := strconv.Atoi(externalDeviceConnDetail.BackupBgpRemoteAsNum)
+			backupBgpRemoteAsNumber = backupBgpRemoteAsNumberRead
+		}
+
+		if externalDeviceConn.TunnelProtocol != "LAN" {
+			if externalDeviceConnDetail.HAEnabled == "enabled" {
+				if len(externalDeviceConnDetail.Tunnels) == 2 {
+					remoteIP := strings.Split(externalDeviceConnDetail.RemoteGatewayIP, ",")
+					if len(remoteIP) == 2 {
+						if remoteIP[0] == remoteIP[1] {
+							externalDeviceConn.LocalTunnelCidr = externalDeviceConnDetail.LocalTunnelCidr + "," + externalDeviceConnDetail.BackupLocalTunnelCidr
+							externalDeviceConn.RemoteTunnelCidr = externalDeviceConnDetail.RemoteTunnelCidr + "," + externalDeviceConnDetail.BackupRemoteTunnelCidr
+							externalDeviceConn.HAEnabled = "disabled"
+						} else {
+							externalDeviceConn.LocalTunnelCidr = externalDeviceConnDetail.LocalTunnelCidr + "," + externalDeviceConnDetail.BackupLocalTunnelCidr
+							externalDeviceConn.RemoteTunnelCidr = externalDeviceConnDetail.RemoteTunnelCidr + "," + externalDeviceConnDetail.BackupRemoteTunnelCidr
+							externalDeviceConn.RemoteGatewayIP = remoteIP[0] + "," + remoteIP[1]
+							externalDeviceConn.HAEnabled = "disabled"
+						}
+					} else if len(remoteIP) == 4 {
+						if remoteIP[0] == remoteIP[2] && remoteIP[1] == remoteIP[3] {
+							externalDeviceConn.LocalTunnelCidr = externalDeviceConnDetail.LocalTunnelCidr + "," + externalDeviceConnDetail.BackupLocalTunnelCidr
+							externalDeviceConn.RemoteTunnelCidr = externalDeviceConnDetail.RemoteTunnelCidr + "," + externalDeviceConnDetail.BackupRemoteTunnelCidr
+							externalDeviceConn.RemoteGatewayIP = remoteIP[0] + "," + remoteIP[1]
+							externalDeviceConn.HAEnabled = "disabled"
+						}
+					}
+				} else if len(externalDeviceConnDetail.Tunnels) == 4 {
+					externalDeviceConn.LocalTunnelCidr = externalDeviceConnDetail.LocalTunnelCidr
+					externalDeviceConn.BackupLocalTunnelCidr = externalDeviceConnDetail.BackupLocalTunnelCidr
+					externalDeviceConn.RemoteTunnelCidr = externalDeviceConnDetail.RemoteTunnelCidr
+					externalDeviceConn.BackupRemoteTunnelCidr = externalDeviceConnDetail.BackupRemoteTunnelCidr
+					externalDeviceConn.BackupRemoteGatewayIP = strings.Split(externalDeviceConnDetail.RemoteGatewayIP, ",")[1]
+					externalDeviceConn.HAEnabled = "enabled"
+					externalDeviceConn.BackupBgpRemoteAsNum = backupBgpRemoteAsNumber
+				}
+			} else {
+				externalDeviceConn.LocalTunnelCidr = externalDeviceConnDetail.LocalTunnelCidr
+				externalDeviceConn.RemoteTunnelCidr = externalDeviceConnDetail.RemoteTunnelCidr
+				if len(externalDeviceConnDetail.Tunnels) == 2 {
+					externalDeviceConn.BackupLocalTunnelCidr = externalDeviceConnDetail.BackupLocalTunnelCidr
+					externalDeviceConn.BackupRemoteTunnelCidr = externalDeviceConnDetail.BackupRemoteTunnelCidr
+					externalDeviceConn.BackupRemoteGatewayIP = strings.Split(externalDeviceConnDetail.RemoteGatewayIP, ",")[1]
+					externalDeviceConn.BackupBgpRemoteAsNum = backupBgpRemoteAsNumber
+					externalDeviceConn.HAEnabled = "enabled"
+				} else {
+					externalDeviceConn.HAEnabled = "disabled"
+				}
+			}
+		} else {
+			externalDeviceConn.EnableBgpLanActiveMesh = externalDeviceConnDetail.EnableBgpLanActiveMesh
+			if len(externalDeviceConnDetail.Tunnels) == 2 || len(externalDeviceConnDetail.Tunnels) == 4 {
+				externalDeviceConn.HAEnabled = "enabled"
+				externalDeviceConn.BackupBgpRemoteAsNum = backupBgpRemoteAsNumber
+				externalDeviceConn.BackupRemoteLanIP = externalDeviceConnDetail.BackupRemoteLanIP
+				externalDeviceConn.BackupLocalLanIP = externalDeviceConnDetail.BackupLocalLanIP
+			} else {
+				externalDeviceConn.HAEnabled = "disabled"
+			}
+			externalDeviceConn.RemoteLanIP = externalDeviceConnDetail.RemoteLanIP
+			externalDeviceConn.LocalLanIP = externalDeviceConnDetail.LocalLanIP
+		}
+
+		if externalDeviceConnDetail.BackupDirectConnect {
+			externalDeviceConn.BackupDirectConnect = "enabled"
+		} else {
+			externalDeviceConn.BackupDirectConnect = "disabled"
+		}
+		if externalDeviceConnDetail.EnableEdgeSegmentation {
+			externalDeviceConn.EnableEdgeSegmentation = "enabled"
+		} else {
+			externalDeviceConn.EnableEdgeSegmentation = "disabled"
+		}
+		externalDeviceConn.ManualBGPCidrs = externalDeviceConnDetail.ManualBGPCidrs
+
+		if externalDeviceConnDetail.IkeVer == "2" {
+			externalDeviceConn.EnableIkev2 = "enabled"
+		} else {
+			externalDeviceConn.EnableIkev2 = "disabled"
+		}
+		externalDeviceConn.EventTriggeredHA = externalDeviceConnDetail.EventTriggeredHA == "enabled"
+		externalDeviceConn.EnableJumboFrame = externalDeviceConnDetail.EnableJumboFrame
+		externalDeviceConn.PeerVnetId = externalDeviceConnDetail.PeerVnetId
+		externalDeviceConn.Phase1RemoteIdentifier = externalDeviceConnDetail.Phase1RemoteIdentifier
+		externalDeviceConn.PrependAsPath = externalDeviceConnDetail.PrependAsPath
+		externalDeviceConn.EnableEdgeUnderlay = externalDeviceConnDetail.WanUnderlay
+		externalDeviceConn.RemoteCloudType = externalDeviceConnDetail.RemoteCloudType
+		externalDeviceConn.Phase1LocalIdentifier = externalDeviceConnDetail.Phase1LocalIdentifier
+
+		if externalDeviceConnDetail.WanUnderlay && strings.Contains(inputGwName, "hagw") {
+			externalDeviceConn.GwName = inputGwName
+			externalDeviceConn.BgpRemoteAsNum = externalDeviceConn.BackupBgpRemoteAsNum
+			externalDeviceConn.LocalLanIP = externalDeviceConnDetail.BackupLocalLanIP
+			externalDeviceConn.RemoteLanIP = externalDeviceConnDetail.BackupRemoteLanIP
+		}
+
+		return externalDeviceConn, nil
+	}
+
+	return nil, ErrNotFound
 }

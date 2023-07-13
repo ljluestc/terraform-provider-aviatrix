@@ -12,9 +12,156 @@ Track all Aviatrix Terraform provider's releases. New resources, features, and b
 
 ---
 
-``Last updated: R3.0.3 (UserConnect-7.0.1601)``
+``Last updated: R3.0.6 (UserConnect-7.0.1768)``
 
 ---
+
+## 3.1.1
+### Notes:
+- Release date: **(14 Jun 2023)**
+- Supported Controller version: **UserConnect-7.1.1794**
+- Supported Terraform version: **v1.x**
+
+### Features:
+#### Multi-Cloud Transit:
+1. Implemented a new resource to support Edge VM Selfmanaged:
+   - **aviatrix_edge_vm_selfmanaged**
+2. Implemented new resources to support Edge Platform device onboarding, Edge Platform and HA:
+   - **aviatrix_edge_platform_device_onboarding**
+   - **aviatrix_edge_platform**
+   - **aviatrix_edge_platform_ha**
+3. Implemented a new attribute to support ignoring DFW policy for SG orchestration in **aviatrix_distributed_firewalling_policy_list**:
+   - ``exclude_sg_orchestration``
+4. Implemented a new resource to support configuring how proxy handles bad origin certificates:
+   - **aviatrix_distributed_firewalling_origin_cert_enforcement_config**
+5. Implemented a new resource to allow customer directed change of MITM CA cert/key:
+   - **aviatrix_distributed_firewalling_proxy_ca_config**
+
+#### Copilot:
+1. Implemented new resources to support Copilot simple and fault-tolerant deployments:
+   - **aviatrix_copilot_simple_deployment**
+   - **aviatrix_copilot_fault_tolerant_deployment**
+
+### Enhancements:
+1. Added support for updating ``enable_edge_active_standby`` and ``enable_edge_active_standby_preemptive`` in Edge resources
+2. Updated valid range of ``insane_mode_tunnel_number`` to "2-50" in **aviatrix_edge_spoke_transit_attachment**
+3. Added support for ``manual_bgp_advertised_cidrs`` in **aviatrix_edge_spoke_external_device_conn**
+4. Changed ``profile_name`` to be optional in **aviatrix_remote_syslog**
+
+### Bug Fixes:
+1. Fixed issue where creating BGP underlay for Edge HA failed for **aviatrix_edge_spoke_external_device_conn**
+2. Fixed issue where retrieving transit gateway peering info from a corrupted database caused provider crash
+3. Fixed issue where task status check could fail due to proxy error
+4. Fixed issue where enabling single IP SNAT failed during spoke gateway creation
+
+
+## 3.1.0
+### Notes:
+- Release date: **(11 May 2023)**
+- Supported Controller version: **UserConnect-7.1**
+- Supported Terraform version: **v1.x**
+
+### Features:
+#### Gateway:
+1. Implemented support for configuring GRO/GSO in **aviatrix_gateway**
+
+#### Multi-Cloud Transit:
+1. Implemented support for configuring Local Identifier in **aviatrix_site2cloud**, **aviatrix_spoke_external_device_conn** and **aviatrix_transit_external_device_conn**
+2. Implemented support for configuring GRO/GSO in **aviatrix_spoke_gateway** and **aviatrix_transit_gateway**
+3. Implemented support for BGP over GRE on a BGP Spoke in **aviatrix_spoke_external_device_conn**
+4. Implemented new resources to support Edge Equinix and HA:
+   - **aviatrix_edge_equinix**
+   - **aviatrix_edge_equinix_ha**
+5. Implemented new resources to support Edge NEO device onboarding, Edge NEO and HA:
+   - **aviatrix_edge_neo_device_onboarding**
+   - **aviatrix_edge_neo**
+   - **aviatrix_edge_neo_ha**
+6. Added a new attribute in **aviatrix_spoke_gateway** to support GCP spoke global VPC:
+   - ``enable_global_vpc``
+7. Implemented new resources to support GCP global VPC excluded instance and tagging settings:
+   - **aviatrix_global_vpc_excluded_instance**
+   - **aviatrix_global_vpc_tagging_settings**
+8. Added a new attribute in **aviatrix_edge_spoke_external_device_conn** to support BGP over WAN underlay:
+   - ``enable_edge_underlay``
+9. Added a new attribute in **aviatrix_edge_spoke_external_device_conn** to support Prepend AS Path:
+   - ``prepend_as_path``
+10. Added a new attribute in **aviatrix_edge_spoke_transit_attachment** to support multiple WAN interfaces:
+    - ``edge_wan_interfaces``
+11. Implemented a new data source to get Edge gateway WAN interface IP address:
+    - **aviatrix_edge_gateway_wan_interface_discovery**
+
+#### Settings:
+1. Implemented a new data source to collect controller metadata:
+   - **aviatrix_controller_metadata**
+
+#### Copilot:
+1. Implemented new resources to support QoS class and QoS policy list:
+   - **aviatrix_qos_class**
+   - **aviatrix_qos_policy_list**
+
+### Enhancements:
+1. Added support for ``fqdn`` as one of the attributes under ``selector`` in **aviatrix_smart_group**
+2. Added support for the "#" character in Azure gateway tags
+3. Added support for enabling BGP over LAN for Azure transit in update in **aviatrix_transit_gateway**
+4. Changed ``cloud_type``, ``account_name``, ``insane_mode`` and ``insane_mode_az`` to "ForceNew" in **aviatrix_gateway**, **aviatrix_spoke_gateway** and **aviatrix_transit_gateway**
+5. Removed ``bgp_lan_interfaces_count``'s default value in **aviatrix_transit_gateway**
+6. Removed the option to config proxies in private mode config in **aviatrix_controller_private_mode_config**
+7. Restored the following attributes in **aviatrix_cloudn_transit_gateway_attachment**:
+   - ``enable_dead_peer_detection``
+   - ``enable_learned_cidrs_approval``
+   - ``approved_cidrs``
+8. Added support for "ddog-gov.com" in **aviatrix_datadog_agent**
+9. Added support for connection with HA in **aviatrix_edge_spoke_external_device_conn**
+
+### Bug Fixes:
+1. Fixed issue where ``max_vpn_conn`` was not properly set in TF state and could not be updated in **aviatrix_gateway**
+2. Fixed issue where retries inconsistently failed in **aviatrix_edge_spoke_transit_attachment**
+
+### Preview Features:
+1. Implemented support of MITM/IDS: Request URL filtering:
+   - New resource: **aviatrix_web_group**
+   - New attributes in **aviatrix_spoke_gateway**:
+      - ``web_groups``
+      - ``flow_app_requirement``
+      - ``decrypt_policy``
+
+### Deprecations
+1. Removed support of **aviatrix_splunk_logging**, **aviatrix_filebeat_forwarder** and **aviatrix_sumologic_forwarder**
+
+
+## 3.0.6
+### Notes:
+- Release date: **(30 Jun 2023)**
+- Supported Controller version: **UserConnect-7.0.1768**
+- Supported Terraform version: **v1.x**
+
+### Bug Fixes:
+1. Fixed issue where in-place update to enable Transit FireNet with GWLB fails in **aviatrix_transit_gateway**
+2. Fixed issue where newly launched Controller fails to upgrade to 7.1
+3. Fixed issue where retrieving Transit Gateway Peering info might cause provider to crash in **aviatrix_transit_gateway_peering**
+
+
+## 3.0.5
+### Notes:
+- Release date: **(13 Apr 2023)**
+- Supported Controller version: **UserConnect-7.0.1724**
+- Supported Terraform version: **v1.x**
+
+### Features:
+#### Settings
+1. Implemented a new resource to support Controller Security Group Management:
+   - **aviatrix_controller_access_allow_list_config**
+
+
+## 3.0.4
+### Notes:
+- Release date: **(13 Apr 2023)**
+- Supported Controller version: **UserConnect-7.0.1724**
+- Supported Terraform version: **v1.x**
+
+### Enhancements:
+1. Added support for whitespace characters in **aviatrix_firewall_policy** ``description``
+
 
 ## 3.0.3
 ### Notes:

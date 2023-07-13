@@ -42,8 +42,16 @@ type APIRequest struct {
 	Action string `form:"action,omitempty" json:"action" url:"action"`
 }
 
+//go:generate moq -rm -out client_mock.go . ClientInterface
+type ClientInterface interface {
+	DeleteAccount(account *Account) error
+	GetAccount(account *Account) (*Account, error)
+	AuditAccount(ctx context.Context, account *Account) error
+}
+
 // Client for accessing the Aviatrix Controller
 type Client struct {
+	ClientInterface
 	HTTPClient       *http.Client
 	Username         string
 	Password         string
@@ -90,9 +98,12 @@ func (c *Client) GetApiToken() (string, error) {
 // Login to the Aviatrix controller with the username/password provided in
 // the client structure.
 // Arguments:
-//    None
+//
+//	None
+//
 // Returns:
-//    error - if any
+//
+//	error - if any
 func (c *Client) Login() error {
 	ApiToken, err := c.GetApiToken()
 	if err != nil {
@@ -146,15 +157,20 @@ func (c *Client) LoginForCloudn() error {
 
 // NewClient creates a Client object using the arguments provided.
 // Arguments:
-//   username - the controller username
-//   password - the controller password
-//   controllerIP - the controller IP/host
-//   HTTPClient - the http client object
+//
+//	username - the controller username
+//	password - the controller password
+//	controllerIP - the controller IP/host
+//	HTTPClient - the http client object
+//
 // Returns:
-//   Client - the newly created client
-//   error - if any
+//
+//	Client - the newly created client
+//	error - if any
+//
 // See Also:
-//   init()
+//
+//	init()
 func NewClient(username string, password string, controllerIP string, HTTPClient *http.Client, ignoreTagsConfig *IgnoreTagsConfig) (*Client, error) {
 	client := &Client{Username: username, Password: password, HTTPClient: HTTPClient, ControllerIP: controllerIP, IgnoreTagsConfig: ignoreTagsConfig}
 	return client.init(controllerIP)
@@ -168,10 +184,13 @@ func NewClientForCloudn(username string, password string, controllerIP string, H
 // init initializes the new client with the given controller IP/host.  Logs
 // in to the controller and sets up the http client.
 // Arguments:
-//    controllerIP - the controller host/IP
+//
+//	controllerIP - the controller host/IP
+//
 // Returns:
-//   Client - the updated client object
-//   error - if any
+//
+//	Client - the updated client object
+//	error - if any
 func (c *Client) init(controllerIP string) (*Client, error) {
 	if len(controllerIP) == 0 {
 		return nil, fmt.Errorf("Aviatrix: Client: Controller IP is not set")
@@ -200,7 +219,7 @@ func (c *Client) initForCloudn(controllerIP string) (*Client, error) {
 		return nil, fmt.Errorf("Aviatrix: Client: Controller IP is not set")
 	}
 
-	c.baseURL = "https://" + controllerIP + "/v2/api"
+	c.baseURL = "https://" + controllerIP + "/v1/api"
 
 	if c.HTTPClient == nil {
 		tr := &http.Transport{
@@ -271,6 +290,16 @@ func (c *Client) PostAPI(action string, d interface{}, checkFunc CheckAPIRespons
 // PostAPIContext makes a post request to the Aviatrix API, decodes the response and checks for any errors
 func (c *Client) PostAPIContext(ctx context.Context, action string, d interface{}, checkFunc CheckAPIResponseFunc) error {
 	resp, err := c.PostContext(ctx, c.baseURL, d)
+	if err != nil {
+		return fmt.Errorf("HTTP POST %q failed: %v", action, err)
+	}
+	return checkAPIResp(resp, action, checkFunc)
+}
+
+// PostAPIContext1 makes a post request to the V1 API, decodes the response and checks for any errors
+func (c *Client) PostAPIContext1(ctx context.Context, action string, d interface{}, checkFunc CheckAPIResponseFunc) error {
+	Url := fmt.Sprintf("https://%s/v1/api", c.ControllerIP)
+	resp, err := c.PostContext(ctx, Url, d)
 	if err != nil {
 		return fmt.Errorf("HTTP POST %q failed: %v", action, err)
 	}
@@ -382,6 +411,10 @@ func (c *Client) PostAsyncAPIContext(ctx context.Context, action string, i inter
 		buf.ReadFrom(resp.Body)
 		err = json.Unmarshal(buf.Bytes(), &data)
 		if err != nil {
+			if strings.Contains(buf.String(), "502 Proxy Error") || strings.Contains(buf.String(), "503 Service Unavailable") {
+				time.Sleep(sleepDuration)
+				continue
+			}
 			return fmt.Errorf("decode check_task_status failed: %v\n Body: %s", err, buf.String())
 		}
 		if !data.Return {

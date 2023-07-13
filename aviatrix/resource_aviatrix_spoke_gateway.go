@@ -257,6 +257,12 @@ func resourceAviatrixSpokeGateway() *schema.Resource {
 				Default:     true,
 				Description: "Enable jumbo frame support for spoke gateway. Valid values: true or false. Default value: true.",
 			},
+			"enable_gro_gso": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     true,
+				Description: "Specify whether to disable GRO/GSO or not.",
+			},
 			"tags": {
 				Type:        schema.TypeMap,
 				Elem:        &schema.Schema{Type: schema.TypeString},
@@ -404,7 +410,6 @@ func resourceAviatrixSpokeGateway() *schema.Resource {
 			"bgp_lan_interfaces_count": {
 				Type:         schema.TypeInt,
 				Optional:     true,
-				Default:      1,
 				ForceNew:     true,
 				ValidateFunc: validation.IntAtLeast(1),
 				Description: "Number of interfaces that will be created for BGP over LAN enabled Azure spoke. " +
@@ -412,14 +417,24 @@ func resourceAviatrixSpokeGateway() *schema.Resource {
 					"Available as of provider version R3.0.2+.",
 			},
 			"enable_spot_instance": {
-				Type:         schema.TypeBool,
-				Optional:     true,
+				Type:     schema.TypeBool,
+				Optional: true,
+				ForceNew: true,
+				ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
+					v := val.(bool)
+					if !v {
+						errs = append(errs, fmt.Errorf("expected %s to true to enable spot instance, got: %v", key, val))
+						return warns, errs
+					}
+					return
+				},
 				Description:  "Enable spot instance. NOT supported for production deployment.",
 				RequiredWith: []string{"spot_price"},
 			},
 			"spot_price": {
 				Type:         schema.TypeString,
 				Optional:     true,
+				ForceNew:     true,
 				Description:  "Price for spot instance. NOT supported for production deployment.",
 				RequiredWith: []string{"enable_spot_instance"},
 			},
@@ -579,6 +594,12 @@ func resourceAviatrixSpokeGateway() *schema.Resource {
 				Description: "List of available BGP LAN interface IPs for spoke external device HA connection creation. " +
 					"Only supports 8 (Azure), 32 (AzureGov) or AzureChina (2048). Available as of provider version R3.0.2+.",
 			},
+			"enable_global_vpc": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				Default:     false,
+				Description: "Set to true to enable global VPC. Only supported for GCP.",
+			},
 		},
 	}
 }
@@ -596,6 +617,7 @@ func resourceAviatrixSpokeGatewayCreate(d *schema.ResourceData, meta interface{}
 		AvailabilityDomain:   d.Get("availability_domain").(string),
 		FaultDomain:          d.Get("fault_domain").(string),
 		ApprovedLearnedCidrs: getStringSet(d, "approved_learned_cidrs"),
+		EnableGlobalVpc:      d.Get("enable_global_vpc").(bool),
 	}
 
 	if !d.Get("manage_ha_gateway").(bool) {
@@ -784,13 +806,15 @@ func resourceAviatrixSpokeGatewayCreate(d *schema.ResourceData, meta interface{}
 	if bgpOverLan && !(goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.AzureArmRelatedCloudTypes)) {
 		return fmt.Errorf("'enable_bgp_over_lan' is only valid for Azure (8), AzureGov (32) or AzureChina (2048)")
 	}
-	bgpLanInterfacesCount := d.Get("bgp_lan_interfaces_count").(int)
-	if bgpLanInterfacesCount != 1 && (!bgpOverLan || !goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.AzureArmRelatedCloudTypes)) {
+	bgpLanInterfacesCount, isCountSet := d.GetOk("bgp_lan_interfaces_count")
+	if isCountSet && (!bgpOverLan || !goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.AzureArmRelatedCloudTypes)) {
 		return fmt.Errorf("'bgp_lan_interfaces_count' is only valid for BGP over LAN enabled spoke for Azure (8), AzureGov (32) or AzureChina (2048)")
+	} else if !isCountSet && bgpOverLan && goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.AzureArmRelatedCloudTypes) {
+		return fmt.Errorf("please specify 'bgp_lan_interfaces_count' for BGP over LAN enabled Azure spoke: %s", gateway.GwName)
 	}
 	if bgpOverLan {
-		gateway.BgpOverLan = "on"
-		gateway.BgpLanInterfacesCount = bgpLanInterfacesCount
+		gateway.BgpOverLan = true
+		gateway.BgpLanInterfacesCount = bgpLanInterfacesCount.(int)
 	}
 
 	enablePrivateOob := d.Get("enable_private_oob").(bool)
@@ -888,10 +912,6 @@ func resourceAviatrixSpokeGatewayCreate(d *schema.ResourceData, meta interface{}
 		}
 		gateway.EnableSpotInstance = true
 		gateway.SpotPrice = spotPrice
-	} else {
-		if spotPrice != "" {
-			return fmt.Errorf("spot_price is set for enabling spot instance. Please set enable_spot_instance to true")
-		}
 	}
 
 	rxQueueSize := d.Get("rx_queue_size").(string)
@@ -952,6 +972,10 @@ func resourceAviatrixSpokeGatewayCreate(d *schema.ResourceData, meta interface{}
 		if _, ok := d.GetOk("private_mode_lb_vpc_id"); ok {
 			return fmt.Errorf("%q is only valid when Private Mode is enabled", "private_mode_lb_vpc_id")
 		}
+	}
+
+	if gateway.EnableGlobalVpc && !goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.GCPRelatedCloudTypes) {
+		return fmt.Errorf("'enable_global_vpc' is only valid for GCP")
 	}
 
 	log.Printf("[INFO] Creating Aviatrix Spoke Gateway: %#v", gateway)
@@ -1150,6 +1174,16 @@ func resourceAviatrixSpokeGatewayCreate(d *schema.ResourceData, meta interface{}
 		err := client.DisableJumboFrame(gw)
 		if err != nil {
 			return fmt.Errorf("could not disable jumbo frame for spoke gateway: %v", err)
+		}
+	}
+
+	if !d.Get("enable_gro_gso").(bool) {
+		gw := &goaviatrix.Gateway{
+			GwName: d.Get("gw_name").(string),
+		}
+		err := client.DisableGroGso(gw)
+		if err != nil {
+			return fmt.Errorf("couldn't disable GRO/GSO on spoke gateway: %s", err)
 		}
 	}
 
@@ -1388,15 +1422,16 @@ func resourceAviatrixSpokeGatewayRead(d *schema.ResourceData, meta interface{}) 
 		d.Set("ha_bgp_lan_ip_list", nil)
 	}
 
-	if goaviatrix.IsCloudType(gw.CloudType, goaviatrix.AzureArmRelatedCloudTypes) && gw.BgpLanInterfacesCount > 1 {
+	if goaviatrix.IsCloudType(gw.CloudType, goaviatrix.AzureArmRelatedCloudTypes) && gw.EnableBgpOverLan {
 		d.Set("bgp_lan_interfaces_count", gw.BgpLanInterfacesCount)
 	} else {
-		d.Set("bgp_lan_interfaces_count", 1)
+		d.Set("bgp_lan_interfaces_count", nil)
 	}
 	d.Set("enable_learned_cidrs_approval", gw.EnableLearnedCidrsApproval)
 	d.Set("enable_preserve_as_path", gw.EnablePreserveAsPath)
 	d.Set("rx_queue_size", gw.RxQueueSize)
 	d.Set("public_ip", gw.PublicIP)
+	d.Set("enable_global_vpc", gw.EnableGlobalVpc)
 
 	if gw.EnableLearnedCidrsApproval {
 		spokeAdvancedConfig, err := client.GetSpokeGatewayAdvancedConfig(&goaviatrix.SpokeVpc{GwName: gw.GwName})
@@ -1596,6 +1631,12 @@ func resourceAviatrixSpokeGatewayRead(d *schema.ResourceData, meta interface{}) 
 		d.Set("private_mode_subnet_zone", nil)
 	}
 
+	enableGroGso, err := client.GetGroGsoStatus(gw)
+	if err != nil {
+		return fmt.Errorf("failed to get GRO/GSO status of spoke gateway %s: %v", gw.GwName, err)
+	}
+	d.Set("enable_gro_gso", enableGroGso)
+
 	if d.Get("manage_ha_gateway").(bool) {
 		if gw.HaGw.GwSize == "" {
 			d.Set("ha_availability_domain", "")
@@ -1766,12 +1807,6 @@ func resourceAviatrixSpokeGatewayUpdate(d *schema.ResourceData, meta interface{}
 			return fmt.Errorf("failed to update spoke gateway: changing 'ha_azure_eip_name_resource_group' is not allowed")
 		}
 	}
-	if d.HasChange("enable_spot_instance") {
-		return fmt.Errorf("updating enable_spot_instance is not allowed")
-	}
-	if d.HasChange("spot_price") {
-		return fmt.Errorf("updating spot_price is not allowed")
-	}
 
 	learnedCidrsApproval := d.Get("enable_learned_cidrs_approval").(bool)
 	approvedLearnedCidrs := getStringSet(d, "approved_learned_cidrs")
@@ -1797,6 +1832,10 @@ func resourceAviatrixSpokeGatewayUpdate(d *schema.ResourceData, meta interface{}
 		if d.HasChange("ha_private_mode_subnet_zone") {
 			return fmt.Errorf("updating %q is not allowed if private mode is disabled", "ha_private_mode_subnet_zone")
 		}
+	}
+
+	if d.HasChange("enable_global_vpc") && !goaviatrix.IsCloudType(gateway.CloudType, goaviatrix.GCPRelatedCloudTypes) {
+		return fmt.Errorf("global vpc can only be enabled for GCP")
 	}
 
 	if d.HasChange("enable_preserve_as_path") {
@@ -2320,6 +2359,20 @@ func resourceAviatrixSpokeGatewayUpdate(d *schema.ResourceData, meta interface{}
 		}
 	}
 
+	if d.HasChange("enable_gro_gso") {
+		if d.Get("enable_gro_gso").(bool) {
+			err := client.EnableGroGso(gateway)
+			if err != nil {
+				return fmt.Errorf("couldn't enable GRO/GSO on spoke gateway when updating: %s", err)
+			}
+		} else {
+			err := client.DisableGroGso(gateway)
+			if err != nil {
+				return fmt.Errorf("couldn't disable GRO/GSO on spoke gateway when updating: %s", err)
+			}
+		}
+	}
+
 	if d.HasChange("enable_private_vpc_default_route") {
 		if d.Get("enable_private_vpc_default_route").(bool) {
 			err := client.EnablePrivateVpcDefaultRoute(gateway)
@@ -2613,6 +2666,20 @@ func resourceAviatrixSpokeGatewayUpdate(d *schema.ResourceData, meta interface{}
 			err := client.SetRxQueueSize(haGwRxQueueSize)
 			if err != nil {
 				return fmt.Errorf("could not modify rx queue size for spoke ha: %s during gateway update: %v", haGwRxQueueSize.GwName, err)
+			}
+		}
+	}
+
+	if d.HasChange("enable_global_vpc") {
+		if d.Get("enable_global_vpc").(bool) {
+			err := client.EnableGlobalVpc(gateway)
+			if err != nil {
+				return fmt.Errorf("could not enable global vpc during spoke gateway update: %v", err)
+			}
+		} else {
+			err := client.DisableGlobalVpc(gateway)
+			if err != nil {
+				return fmt.Errorf("could not disable global vpc during spoke gateway update: %v", err)
 			}
 		}
 	}
