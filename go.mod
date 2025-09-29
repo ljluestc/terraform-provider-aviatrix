@@ -1,7 +1,8 @@
 module github.com/AviatrixSystems/terraform-provider-aviatrix/v3
 
-go 1.23
-toolchain go1.24.1
+go 1.23.0
+
+toolchain go1.24.4
 
 require (
 	github.com/ajg/form v1.5.2-0.20200323032839-9aeb3cf462e1
