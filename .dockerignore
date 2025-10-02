@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# CI/CD
+.github
+.taskmaster
+
+# Documentation
+*.md
+docs/
+
+# Test data that shouldn't be in container
+test-data/
+test-infra/
+
+# Environment files
+.env*
+*.env
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+terraform-provider-aviatrix
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Terraform files
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+
+# Logs
+*.log

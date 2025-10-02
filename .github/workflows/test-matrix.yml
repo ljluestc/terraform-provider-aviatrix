@@ -1,0 +1,360 @@
+name: test-matrix
+env:
+  Go_Version: "1.23"
+  Terraform_Version: "1.6.6"
+
+on:
+  pull_request:
+    branches: [ main, master ]
+  push:
+    branches: [ main, master ]
+  schedule:
+    # Run nightly at 2 AM UTC
+    - cron: '0 2 * * *'
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      relevant_files: ${{ steps.changes.outputs.relevant_files }}
+      go_files: ${{ steps.changes.outputs.go_files }}
+      test_files: ${{ steps.changes.outputs.test_files }}
+    steps:
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36
+        id: changes
+        with:
+          filters: |
+            relevant_files:
+              - '!docs/**'
+              - '!*.md'
+              - '!test-infra/README_accep_test.md'
+            go_files:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+            test_files:
+              - '**/*_test.go'
+              - 'test-infra/**'
+
+  unit-tests:
+    name: unit-tests
+    needs: changes
+    if: needs.changes.outputs.go_files == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ["1.23", "1.24"]
+    steps:
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Install test tools
+        run: |
+          go install github.com/jstemmer/go-junit-report/v2@latest
+          go install github.com/axw/gocov/gocov@latest
+          go install github.com/AlekSi/gocov-xml@latest
+
+      - name: Create test results directory
+        run: mkdir -p test-results
+
+      - name: Run unit tests
+        run: |
+          go test -v -race -coverprofile=test-results/coverage.out -timeout=30m ./... 2>&1 |
+          tee test-results/unit-tests.log |
+          go-junit-report -set-exit-code > test-results/unit-tests.xml
+
+      - name: Generate coverage report
+        run: |
+          gocov convert test-results/coverage.out | gocov-xml > test-results/coverage.xml
+          go tool cover -html=test-results/coverage.out -o test-results/coverage.html
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results-go${{ matrix.go-version }}
+          path: test-results/
+
+  docker-build:
+    name: docker-build
+    needs: changes
+    if: needs.changes.outputs.relevant_files == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [builder, test, production, ci-test]
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          tags: terraform-provider-aviatrix:${{ matrix.target }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          outputs: type=docker,dest=/tmp/image-${{ matrix.target }}.tar
+
+      - name: Upload Docker image
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ matrix.target }}
+          path: /tmp/image-${{ matrix.target }}.tar
+
+  integration-tests:
+    name: integration-tests
+    needs: [changes, docker-build]
+    if: needs.changes.outputs.test_files == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [aws, azure, gcp, oci]
+        include:
+          - provider: aws
+            env_vars: |
+              AWS_ACCESS_KEY_ID
+              AWS_SECRET_ACCESS_KEY
+              AWS_DEFAULT_REGION
+              AWS_ACCOUNT_NUMBER
+            skip_vars: |
+              SKIP_ACCOUNT_AZURE=yes
+              SKIP_ACCOUNT_GCP=yes
+              SKIP_ACCOUNT_OCI=yes
+            test_target: Gateway
+          - provider: azure
+            env_vars: |
+              ARM_CLIENT_ID
+              ARM_CLIENT_SECRET
+              ARM_SUBSCRIPTION_ID
+              ARM_TENANT_ID
+            skip_vars: |
+              SKIP_ACCOUNT_AWS=yes
+              SKIP_ACCOUNT_GCP=yes
+              SKIP_ACCOUNT_OCI=yes
+            test_target: AzureGateway
+          - provider: gcp
+            env_vars: |
+              GOOGLE_APPLICATION_CREDENTIALS
+              GOOGLE_PROJECT
+            skip_vars: |
+              SKIP_ACCOUNT_AWS=yes
+              SKIP_ACCOUNT_AZURE=yes
+              SKIP_ACCOUNT_OCI=yes
+            test_target: GcpGateway
+          - provider: oci
+            env_vars: |
+              OCI_USER_ID
+              OCI_TENANCY_ID
+              OCI_FINGERPRINT
+              OCI_PRIVATE_KEY_PATH
+              OCI_REGION
+            skip_vars: |
+              SKIP_ACCOUNT_AWS=yes
+              SKIP_ACCOUNT_AZURE=yes
+              SKIP_ACCOUNT_GCP=yes
+            test_target: OciGateway
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Download Docker image
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-image-ci-test
+          path: /tmp
+
+      - name: Load Docker image
+        run: docker load --input /tmp/image-ci-test.tar
+
+      - name: Create test results directory
+        run: mkdir -p test-results
+
+      - name: Set up cloud provider credentials
+        env:
+          # AWS
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+          AWS_ACCOUNT_NUMBER: ${{ secrets.AWS_ACCOUNT_NUMBER }}
+          # Azure
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          # GCP
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          GOOGLE_PROJECT: ${{ secrets.GOOGLE_PROJECT }}
+          # OCI
+          OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
+          OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_PRIVATE_KEY_PATH: ${{ secrets.OCI_PRIVATE_KEY_PATH }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          # Aviatrix Controller
+          AVIATRIX_CONTROLLER_IP: ${{ secrets.AVIATRIX_CONTROLLER_IP }}
+          AVIATRIX_USERNAME: ${{ secrets.AVIATRIX_USERNAME }}
+          AVIATRIX_PASSWORD: ${{ secrets.AVIATRIX_PASSWORD }}
+        run: |
+          # Create credential files for providers that need them
+          if [ "${{ matrix.provider }}" = "gcp" ] && [ -n "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+            echo "$GOOGLE_APPLICATION_CREDENTIALS" | base64 -d > gcp-credentials.json
+          fi
+          if [ "${{ matrix.provider }}" = "oci" ] && [ -n "$OCI_PRIVATE_KEY_PATH" ]; then
+            echo "$OCI_PRIVATE_KEY_PATH" | base64 -d > oci-private-key.pem
+          fi
+
+      - name: Run integration tests
+        env:
+          TF_ACC: 1
+          # AWS
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'us-east-1' }}
+          AWS_ACCOUNT_NUMBER: ${{ secrets.AWS_ACCOUNT_NUMBER }}
+          # Azure
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          # GCP
+          GOOGLE_APPLICATION_CREDENTIALS: ./gcp-credentials.json
+          GOOGLE_PROJECT: ${{ secrets.GOOGLE_PROJECT }}
+          # OCI
+          OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
+          OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_PRIVATE_KEY_PATH: ./oci-private-key.pem
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+          # Aviatrix Controller
+          AVIATRIX_CONTROLLER_IP: ${{ secrets.AVIATRIX_CONTROLLER_IP }}
+          AVIATRIX_USERNAME: ${{ secrets.AVIATRIX_USERNAME }}
+          AVIATRIX_PASSWORD: ${{ secrets.AVIATRIX_PASSWORD }}
+        run: |
+          # Set skip variables based on provider
+          ${{ matrix.skip_vars }}
+
+          docker run --rm \
+            -v $(pwd)/test-results:/app/test-results \
+            -v $(pwd)/test-infra:/app/test-infra \
+            $(if [ -f gcp-credentials.json ]; then echo "-v $(pwd)/gcp-credentials.json:/app/gcp-credentials.json:ro"; fi) \
+            $(if [ -f oci-private-key.pem ]; then echo "-v $(pwd)/oci-private-key.pem:/app/oci-private-key.pem:ro"; fi) \
+            -e TF_ACC=1 \
+            -e AWS_ACCESS_KEY_ID \
+            -e AWS_SECRET_ACCESS_KEY \
+            -e AWS_DEFAULT_REGION \
+            -e AWS_ACCOUNT_NUMBER \
+            -e ARM_CLIENT_ID \
+            -e ARM_CLIENT_SECRET \
+            -e ARM_SUBSCRIPTION_ID \
+            -e ARM_TENANT_ID \
+            -e GOOGLE_APPLICATION_CREDENTIALS \
+            -e GOOGLE_PROJECT \
+            -e OCI_USER_ID \
+            -e OCI_TENANCY_ID \
+            -e OCI_FINGERPRINT \
+            -e OCI_PRIVATE_KEY_PATH \
+            -e OCI_REGION \
+            -e AVIATRIX_CONTROLLER_IP \
+            -e AVIATRIX_USERNAME \
+            -e AVIATRIX_PASSWORD \
+            -e SKIP_ACCOUNT_AWS \
+            -e SKIP_ACCOUNT_AZURE \
+            -e SKIP_ACCOUNT_GCP \
+            -e SKIP_ACCOUNT_OCI \
+            terraform-provider-aviatrix:ci-test \
+            sh -c "
+              mkdir -p /app/test-results &&
+              cd /app/test-infra &&
+              terraform init &&
+              terraform apply -auto-approve &&
+              source ./cmdExportOutput.sh &&
+              cd /app &&
+              timeout 3600 ./test-infra/runAccTest.sh ${{ matrix.test_target }} 2>&1 |
+              tee /app/test-results/integration-${{ matrix.provider }}.log
+            "
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results-${{ matrix.provider }}
+          path: test-results/
+
+  security-scan:
+    name: security-scan
+    needs: changes
+    if: needs.changes.outputs.go_files == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Run Gosec Security Scanner
+        uses: securecodewarrior/github-action-gosec@master
+        with:
+          args: '-fmt sarif -out gosec-results.sarif ./...'
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gosec-results.sarif
+
+  test-summary:
+    name: test-summary
+    needs: [unit-tests, integration-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-test-results
+
+      - name: Generate test summary
+        run: |
+          echo "# Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count test artifacts
+          unit_tests=$(find all-test-results -name "unit-test-results-*" | wc -l)
+          integration_tests=$(find all-test-results -name "integration-test-results-*" | wc -l)
+
+          echo "- Unit Tests: $unit_tests configurations tested" >> $GITHUB_STEP_SUMMARY
+          echo "- Integration Tests: $integration_tests cloud providers tested" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check for test failures
+          if find all-test-results -name "*.log" -exec grep -l "FAIL\|ERROR" {} \; | grep -q .; then
+            echo "⚠️ Some tests failed. Check the individual job outputs for details." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ All available tests passed successfully!" >> $GITHUB_STEP_SUMMARY
+          fi

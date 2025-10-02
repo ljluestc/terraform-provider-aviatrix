@@ -1,0 +1,153 @@
+version: '3.8'
+
+services:
+  # Unit tests
+  unit-tests:
+    build:
+      context: .
+      target: test
+    environment:
+      - GO_TEST_TIMEOUT=30m
+      - GOMAXPROCS=4
+    volumes:
+      - ./test-results:/app/test-results
+    command: >
+      sh -c "
+        mkdir -p /app/test-results &&
+        go test -v -timeout=30m -race -coverprofile=/app/test-results/coverage.out ./... 2>&1 |
+        tee /app/test-results/unit-tests.log |
+        go-junit-report -set-exit-code > /app/test-results/unit-tests.xml &&
+        gocov convert /app/test-results/coverage.out | gocov-xml > /app/test-results/coverage.xml
+      "
+
+  # Integration tests with AWS
+  integration-tests-aws:
+    build:
+      context: .
+      target: ci-test
+    environment:
+      - AWS_ACCESS_KEY_ID
+      - AWS_SECRET_ACCESS_KEY
+      - AWS_DEFAULT_REGION=us-east-1
+      - AVIATRIX_CONTROLLER_IP
+      - AVIATRIX_USERNAME
+      - AVIATRIX_PASSWORD
+      - AWS_ACCOUNT_NUMBER
+      - TF_ACC=1
+      - SKIP_ACCOUNT_AZURE=yes
+      - SKIP_ACCOUNT_GCP=yes
+      - SKIP_ACCOUNT_OCI=yes
+    volumes:
+      - ./test-results:/app/test-results
+      - ./test-infra:/app/test-infra
+    command: >
+      sh -c "
+        mkdir -p /app/test-results &&
+        cd /app/test-infra &&
+        terraform init &&
+        terraform apply -auto-approve &&
+        source ./cmdExportOutput.sh &&
+        cd /app &&
+        ./test-infra/runAccTest.sh Gateway 2>&1 |
+        tee /app/test-results/integration-aws.log
+      "
+
+  # Integration tests with Azure
+  integration-tests-azure:
+    build:
+      context: .
+      target: ci-test
+    environment:
+      - ARM_CLIENT_ID
+      - ARM_CLIENT_SECRET
+      - ARM_SUBSCRIPTION_ID
+      - ARM_TENANT_ID
+      - AVIATRIX_CONTROLLER_IP
+      - AVIATRIX_USERNAME
+      - AVIATRIX_PASSWORD
+      - TF_ACC=1
+      - SKIP_ACCOUNT_AWS=yes
+      - SKIP_ACCOUNT_GCP=yes
+      - SKIP_ACCOUNT_OCI=yes
+    volumes:
+      - ./test-results:/app/test-results
+      - ./test-infra:/app/test-infra
+    command: >
+      sh -c "
+        mkdir -p /app/test-results &&
+        cd /app/test-infra &&
+        terraform init &&
+        terraform apply -auto-approve &&
+        source ./cmdExportOutput.sh &&
+        cd /app &&
+        ./test-infra/runAccTest.sh AzureGateway 2>&1 |
+        tee /app/test-results/integration-azure.log
+      "
+
+  # Integration tests with GCP
+  integration-tests-gcp:
+    build:
+      context: .
+      target: ci-test
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-credentials.json
+      - GOOGLE_PROJECT
+      - AVIATRIX_CONTROLLER_IP
+      - AVIATRIX_USERNAME
+      - AVIATRIX_PASSWORD
+      - TF_ACC=1
+      - SKIP_ACCOUNT_AWS=yes
+      - SKIP_ACCOUNT_AZURE=yes
+      - SKIP_ACCOUNT_OCI=yes
+    volumes:
+      - ./test-results:/app/test-results
+      - ./test-infra:/app/test-infra
+      - ${GOOGLE_APPLICATION_CREDENTIALS}:/app/gcp-credentials.json:ro
+    command: >
+      sh -c "
+        mkdir -p /app/test-results &&
+        cd /app/test-infra &&
+        terraform init &&
+        terraform apply -auto-approve &&
+        source ./cmdExportOutput.sh &&
+        cd /app &&
+        ./test-infra/runAccTest.sh GcpGateway 2>&1 |
+        tee /app/test-results/integration-gcp.log
+      "
+
+  # Integration tests with OCI
+  integration-tests-oci:
+    build:
+      context: .
+      target: ci-test
+    environment:
+      - OCI_USER_ID
+      - OCI_TENANCY_ID
+      - OCI_FINGERPRINT
+      - OCI_PRIVATE_KEY_PATH=/app/oci-private-key.pem
+      - OCI_REGION
+      - AVIATRIX_CONTROLLER_IP
+      - AVIATRIX_USERNAME
+      - AVIATRIX_PASSWORD
+      - TF_ACC=1
+      - SKIP_ACCOUNT_AWS=yes
+      - SKIP_ACCOUNT_AZURE=yes
+      - SKIP_ACCOUNT_GCP=yes
+    volumes:
+      - ./test-results:/app/test-results
+      - ./test-infra:/app/test-infra
+      - ${OCI_PRIVATE_KEY_PATH}:/app/oci-private-key.pem:ro
+    command: >
+      sh -c "
+        mkdir -p /app/test-results &&
+        cd /app/test-infra &&
+        terraform init &&
+        terraform apply -auto-approve &&
+        source ./cmdExportOutput.sh &&
+        cd /app &&
+        ./test-infra/runAccTest.sh OciGateway 2>&1 |
+        tee /app/test-results/integration-oci.log
+      "
+
+volumes:
+  test-results:

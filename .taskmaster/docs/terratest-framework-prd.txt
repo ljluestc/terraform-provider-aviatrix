@@ -1,0 +1,1073 @@
+# Product Requirements Document: Comprehensive Terratest Framework for Aviatrix Terraform Provider
+
+## 1. Executive Summary
+
+### 1.1 Project Overview
+Develop a comprehensive Terratest-based integration testing framework to achieve 100% test coverage for the Aviatrix Terraform Provider. This framework will complement existing unit tests with robust end-to-end integration tests that validate real infrastructure provisioning across multiple cloud providers (AWS, Azure, GCP, OCI).
+
+### 1.2 Current State Analysis
+- **Total Resources**: 142 Terraform resources
+- **Total Data Sources**: 23 data sources
+- **Existing Test Files**: 159 unit test files
+- **Total Go Files**: 2,299
+- **Testing Framework**: Currently using Terraform Plugin SDK testing framework
+- **Cloud Providers Supported**: AWS, Azure, GCP, OCI, AWS Gov, Azure Gov, AWS China, Azure China
+- **Test Infrastructure**: Existing test-infra directory with Terraform configurations for multi-cloud setup
+- **CI/CD**: GitHub Actions with test matrix for unit tests, integration tests, and Docker builds
+- **Current Testing Approach**: Acceptance tests using Terraform Plugin SDK with provider-managed test framework
+
+### 1.3 Business Objectives
+- Achieve 100% integration test coverage for all resources and data sources
+- Improve test reliability and reduce false positives/negatives
+- Enable parallel test execution across cloud providers
+- Provide comprehensive validation of resource lifecycle (create, read, update, delete)
+- Support multi-cloud testing scenarios
+- Establish automated regression testing for all features
+- Reduce manual testing effort and time-to-release
+
+### 1.4 Success Metrics
+- 100% test coverage for all 142 resources and 23 data sources
+- All tests passing consistently across cloud providers
+- Test execution time < 2 hours for full suite with parallelization
+- Zero test flakiness (consistent pass/fail across runs)
+- Full integration with CI/CD pipeline
+- Test reports with detailed coverage metrics
+- Automated cleanup of test resources to prevent cost overruns
+
+## 2. Technical Architecture
+
+### 2.1 Technology Stack
+- **Testing Framework**: Terratest (Go-based)
+- **Language**: Go 1.23+
+- **Terraform Version**: 1.6.6+
+- **Cloud Provider CLIs**: AWS CLI v2, Azure CLI, gcloud SDK, OCI CLI
+- **CI/CD**: GitHub Actions
+- **Container Platform**: Docker (multi-stage builds)
+- **Reporting**: Go test tooling (go-junit-report, gocov, gocov-xml)
+
+### 2.2 Project Structure
+```
+terraform-provider-aviatrix/
+├── terratest/
+│   ├── README.md                           # Terratest framework documentation
+│   ├── go.mod                              # Terratest module dependencies
+│   ├── go.sum
+│   ├── common/                             # Shared test utilities
+│   │   ├── test_helpers.go                 # Common test helper functions
+│   │   ├── provider_config.go              # Provider configuration utilities
+│   │   ├── resource_cleanup.go             # Resource cleanup utilities
+│   │   ├── retry_helpers.go                # Retry logic for flaky operations
+│   │   └── validation_helpers.go           # Common validation functions
+│   ├── fixtures/                           # Terraform configuration templates
+│   │   ├── account/                        # Account resource fixtures
+│   │   ├── gateway/                        # Gateway resource fixtures
+│   │   ├── transit/                        # Transit gateway fixtures
+│   │   ├── spoke/                          # Spoke gateway fixtures
+│   │   ├── firewall/                       # Firewall resource fixtures
+│   │   ├── networking/                     # Networking resource fixtures
+│   │   ├── controller/                     # Controller config fixtures
+│   │   └── [resource-category]/            # One directory per resource category
+│   ├── tests/                              # Terratest test files
+│   │   ├── account_test.go                 # Account resource tests
+│   │   ├── gateway_test.go                 # Gateway resource tests
+│   │   ├── transit_gateway_test.go         # Transit gateway tests
+│   │   ├── spoke_gateway_test.go           # Spoke gateway tests
+│   │   ├── aws_tgw_test.go                 # AWS TGW tests
+│   │   ├── firewall_test.go                # Firewall tests
+│   │   ├── [resource]_test.go              # One test file per resource/category
+│   │   └── integration/                    # End-to-end integration tests
+│   │       ├── multi_cloud_test.go         # Multi-cloud scenarios
+│   │       ├── disaster_recovery_test.go   # DR scenarios
+│   │       └── compliance_test.go          # Compliance validation
+│   ├── scripts/                            # Test automation scripts
+│   │   ├── run_tests.sh                    # Main test runner
+│   │   ├── cleanup_resources.sh            # Resource cleanup script
+│   │   ├── setup_env.sh                    # Environment setup
+│   │   └── generate_report.sh              # Test report generation
+│   └── docker/                             # Docker configurations for testing
+│       ├── Dockerfile.terratest            # Terratest-specific Dockerfile
+│       └── docker-compose.terratest.yml    # Docker Compose for test execution
+├── .github/workflows/
+│   └── terratest.yml                       # Terratest CI/CD workflow
+└── test-infra/                             # Existing test infrastructure (enhanced)
+    └── terratest/                          # Terratest-specific infra configs
+```
+
+### 2.3 Terratest Framework Components
+
+#### 2.3.1 Core Testing Pattern
+Each resource test will follow this pattern:
+```go
+func TestAviatrixResource_Basic(t *testing.T) {
+    t.Parallel()
+
+    // Setup
+    uniqueID := random.UniqueId()
+    terraformDir := "../fixtures/[resource]"
+
+    terraformOptions := &terraform.Options{
+        TerraformDir: terraformDir,
+        Vars: map[string]interface{}{
+            "resource_name": fmt.Sprintf("test-%s", uniqueID),
+            // ... other variables
+        },
+        EnvVars: getEnvVarsForProvider(),
+        NoColor: true,
+    }
+
+    // Cleanup
+    defer terraform.Destroy(t, terraformOptions)
+
+    // Execute
+    terraform.InitAndApply(t, terraformOptions)
+
+    // Validate
+    validateResourceCreation(t, terraformOptions)
+
+    // Update test
+    updateResourceAndValidate(t, terraformOptions)
+
+    // Final validation
+    validateResourceState(t, terraformOptions)
+}
+```
+
+#### 2.3.2 Test Categories
+1. **Basic Tests**: Simple resource creation and deletion
+2. **Full Lifecycle Tests**: Create, read, update, delete (CRUD) operations
+3. **Import Tests**: Test Terraform import functionality
+4. **Dependency Tests**: Test resources with dependencies
+5. **Multi-Cloud Tests**: Cross-cloud provider scenarios
+6. **Edge Case Tests**: Boundary conditions and error scenarios
+7. **Performance Tests**: Large-scale resource creation
+8. **Security Tests**: Security group, encryption validation
+9. **HA/DR Tests**: High availability and disaster recovery scenarios
+10. **Compliance Tests**: Regulatory compliance validation
+
+### 2.4 Cloud Provider Coverage
+
+#### 2.4.1 AWS Resources (Primary)
+- Account resources (aws, awsgov, awschina)
+- Gateway resources (transit, spoke, edge)
+- AWS TGW resources (complete suite)
+- Peering resources
+- Firewall/FireNet resources
+- VPN resources
+- Site2Cloud resources
+
+#### 2.4.2 Azure Resources
+- Account resources (azure, azuregov, azurechina)
+- Gateway resources
+- Azure VNG resources
+- Spoke native peering
+- Peering resources
+
+#### 2.4.3 GCP Resources
+- Account resources
+- Gateway resources
+- VPC resources
+- Peering resources
+
+#### 2.4.4 OCI Resources
+- Account resources
+- Gateway resources
+- VPC resources
+
+## 3. Detailed Requirements
+
+### 3.1 Resource Coverage
+
+#### 3.1.1 Tier 1: Core Infrastructure Resources (Priority 1)
+**Account Management (4 resources)**
+- aviatrix_account
+- aviatrix_account_user
+- aviatrix_rbac_group
+- aviatrix_rbac_group_permission_attachment
+
+**Gateway Resources (8 resources)**
+- aviatrix_gateway
+- aviatrix_spoke_gateway
+- aviatrix_transit_gateway
+- aviatrix_spoke_ha_gateway
+- aviatrix_edge_spoke
+- aviatrix_edge_gateway_selfmanaged
+- aviatrix_edge_vm_selfmanaged
+- aviatrix_edge_neo
+
+**VPC/Network Resources (3 resources)**
+- aviatrix_vpc
+- aviatrix_spoke_transit_attachment
+- aviatrix_transit_gateway_peering
+
+#### 3.1.2 Tier 2: Advanced Networking Resources (Priority 2)
+**AWS TGW Suite (10 resources)**
+- aviatrix_aws_tgw
+- aviatrix_aws_tgw_vpc_attachment
+- aviatrix_aws_tgw_network_domain
+- aviatrix_aws_tgw_peering
+- aviatrix_aws_tgw_peering_domain_conn
+- aviatrix_aws_tgw_transit_gateway_attachment
+- aviatrix_aws_tgw_directconnect
+- aviatrix_aws_tgw_vpn_conn
+- aviatrix_aws_tgw_connect
+- aviatrix_aws_tgw_connect_peer
+
+**Peering Resources (4 resources)**
+- aviatrix_aws_peer
+- aviatrix_azure_peer
+- aviatrix_trans_peer
+- aviatrix_azure_spoke_native_peering
+
+**Site2Cloud Resources (3 resources)**
+- aviatrix_site2cloud
+- aviatrix_site2cloud_ca_cert_tag
+- aviatrix_vgw_conn
+
+#### 3.1.3 Tier 3: Security & Firewall Resources (Priority 2)
+**Firewall Resources (9 resources)**
+- aviatrix_firewall
+- aviatrix_firewall_instance
+- aviatrix_firewall_instance_association
+- aviatrix_firewall_policy
+- aviatrix_firewall_tag
+- aviatrix_firewall_management_access
+- aviatrix_firenet
+- aviatrix_centralized_transit_firenet
+- aviatrix_transit_firenet_policy
+
+**Distributed Firewalling (7 resources)**
+- aviatrix_distributed_firewalling_config
+- aviatrix_distributed_firewalling_policy_list
+- aviatrix_distributed_firewalling_intra_vpc
+- aviatrix_distributed_firewalling_proxy_ca_config
+- aviatrix_distributed_firewalling_origin_cert_enforcement_config
+- aviatrix_distributed_firewalling_default_action_rule
+- aviatrix_distributed_firewalling_deployment_policy
+
+**Smart Groups & Network Domains (5 resources)**
+- aviatrix_smart_group
+- aviatrix_web_group
+- aviatrix_segmentation_network_domain
+- aviatrix_segmentation_network_domain_association
+- aviatrix_segmentation_network_domain_connection_policy
+
+#### 3.1.4 Tier 4: VPN & Remote Access Resources (Priority 3)
+**VPN Resources (5 resources)**
+- aviatrix_vpn_user
+- aviatrix_vpn_profile
+- aviatrix_vpn_cert_download
+- aviatrix_vpn_user_accelerator
+- aviatrix_geo_vpn
+
+**FQDN Resources (4 resources)**
+- aviatrix_fqdn
+- aviatrix_fqdn_tag_rule
+- aviatrix_fqdn_pass_through
+- aviatrix_fqdn_global_config
+
+#### 3.1.5 Tier 5: Controller & Configuration Resources (Priority 3)
+**Controller Configuration (14 resources)**
+- aviatrix_controller_config
+- aviatrix_controller_email_config
+- aviatrix_controller_email_exception_notification_config
+- aviatrix_controller_cert_domain_config
+- aviatrix_controller_access_allow_list_config
+- aviatrix_controller_security_group_management_config
+- aviatrix_controller_gateway_keepalive_config
+- aviatrix_controller_private_mode_config
+- aviatrix_controller_private_oob
+- aviatrix_controller_bgp_max_as_limit_config
+- aviatrix_controller_bgp_communities_global_config
+- aviatrix_controller_bgp_communities_auto_cloud_config
+- aviatrix_saml_endpoint
+- aviatrix_proxy_config
+
+**Monitoring & Logging (6 resources)**
+- aviatrix_cloudwatch_agent
+- aviatrix_datadog_agent
+- aviatrix_filebeat_forwarder
+- aviatrix_splunk_logging
+- aviatrix_sumologic_forwarder
+- aviatrix_remote_syslog
+- aviatrix_netflow_agent
+
+#### 3.1.6 Tier 6: Edge & Advanced Features (Priority 4)
+**Edge Resources (12 resources)**
+- aviatrix_edge_csp
+- aviatrix_edge_csp_ha
+- aviatrix_edge_equinix
+- aviatrix_edge_equinix_ha
+- aviatrix_edge_megaport
+- aviatrix_edge_megaport_ha
+- aviatrix_edge_neo_device_onboarding
+- aviatrix_edge_neo_ha
+- aviatrix_edge_platform
+- aviatrix_edge_platform_device_onboarding
+- aviatrix_edge_platform_ha
+- aviatrix_edge_zededa
+- aviatrix_edge_zededa_ha
+- aviatrix_edge_vm_selfmanaged_ha
+- aviatrix_edge_spoke_external_device_conn
+- aviatrix_edge_spoke_transit_attachment
+
+**Copilot Resources (4 resources)**
+- aviatrix_copilot_association
+- aviatrix_copilot_simple_deployment
+- aviatrix_copilot_fault_tolerant_deployment
+- aviatrix_copilot_security_group_management_config
+
+**Advanced Features (10 resources)**
+- aviatrix_aws_guard_duty
+- aviatrix_device_interface_config
+- aviatrix_gateway_dnat
+- aviatrix_gateway_snat
+- aviatrix_gateway_certificate_config
+- aviatrix_global_vpc_excluded_instance
+- aviatrix_global_vpc_tagging_settings
+- aviatrix_periodic_ping
+- aviatrix_private_mode_lb
+- aviatrix_private_mode_multicloud_endpoint
+
+**DCF & QoS Resources (6 resources)**
+- aviatrix_dcf_mwp_policy_block
+- aviatrix_dcf_mwp_policy_list
+- aviatrix_qos_class
+- aviatrix_qos_policy_list
+- aviatrix_sla_class
+- aviatrix_traffic_classifier
+
+**CloudN & External Connectivity (4 resources)**
+- aviatrix_cloudn_transit_gateway_attachment
+- aviatrix_spoke_external_device_conn
+- aviatrix_transit_external_device_conn
+- aviatrix_azure_vng_conn
+- aviatrix_tunnel
+- aviatrix_link_hierarchy
+
+#### 3.1.7 Data Source Coverage (23 data sources)
+All data sources must have corresponding Terratest validation:
+- aviatrix_account
+- aviatrix_caller_identity
+- aviatrix_controller_metadata
+- aviatrix_dcf_mwp_attachment_points
+- aviatrix_dcf_webgroups
+- aviatrix_device_interfaces
+- aviatrix_edge_gateway_wan_interface_discovery
+- aviatrix_firenet
+- aviatrix_firenet_firewall_manager
+- aviatrix_firenet_vendor_integration
+- aviatrix_firewall
+- aviatrix_firewall_instance_images
+- aviatrix_gateway
+- aviatrix_gateway_image
+- aviatrix_network_domains
+- aviatrix_smart_groups
+- aviatrix_spoke_gateway
+- aviatrix_spoke_gateway_inspection_subnets
+- aviatrix_spoke_gateways
+- aviatrix_transit_gateway
+- aviatrix_transit_gateways
+- aviatrix_vpc
+- aviatrix_vpc_tracker
+
+### 3.2 Test Scenarios Per Resource
+
+#### 3.2.1 Standard Test Suite (Every Resource)
+1. **Basic Creation Test**
+   - Create resource with minimal configuration
+   - Validate resource attributes
+   - Verify resource exists in controller
+   - Test Terraform state accuracy
+
+2. **Full Configuration Test**
+   - Create resource with all optional parameters
+   - Validate all attributes are set correctly
+   - Test complex nested configurations
+
+3. **Update Test**
+   - Update mutable attributes
+   - Verify updates are applied correctly
+   - Test immutable attributes trigger replacement
+
+4. **Import Test**
+   - Create resource manually or via API
+   - Import into Terraform state
+   - Validate state matches actual resource
+
+5. **Destroy Test**
+   - Delete resource
+   - Verify complete cleanup
+   - Test orphaned resource detection
+
+6. **Dependency Test**
+   - Create resource with dependencies
+   - Validate dependency chain
+   - Test deletion order
+
+7. **Error Handling Test**
+   - Invalid configuration
+   - Network errors
+   - API errors
+   - Timeout scenarios
+
+8. **Idempotency Test**
+   - Apply same configuration twice
+   - Verify no changes detected
+   - Test drift detection
+
+#### 3.2.2 Cloud-Specific Tests
+1. **AWS-Specific**
+   - IAM role validation
+   - Security group rules
+   - VPC peering connections
+   - TGW attachments
+   - Route table propagation
+
+2. **Azure-Specific**
+   - Service principal validation
+   - VNet peering
+   - Azure VNG connections
+   - Resource group associations
+
+3. **GCP-Specific**
+   - Service account validation
+   - VPC peering
+   - Shared VPC scenarios
+
+4. **OCI-Specific**
+   - Compartment validation
+   - VCN configurations
+
+### 3.3 Environment Configuration
+
+#### 3.3.1 Required Environment Variables
+**Generic (Required for all tests)**
+- AVIATRIX_CONTROLLER_IP
+- AVIATRIX_USERNAME
+- AVIATRIX_PASSWORD
+- TF_ACC=1 (enables acceptance testing mode)
+
+**AWS**
+- AWS_ACCOUNT_NUMBER
+- AWS_ACCESS_KEY
+- AWS_SECRET_KEY
+- AWS_REGION
+- AWS_VPC_ID
+- AWS_VPC_ID2
+- AWS_SUBNET
+- AWS_SUBNET2
+- AWS_VPC_TGW_ID (for TGW tests)
+- AWS_DX_GATEWAY (for DirectConnect tests)
+
+**AWS Gov**
+- AWSGOV_ACCOUNT_NUMBER
+- AWSGOV_ACCESS_KEY
+- AWSGOV_SECRET_KEY
+
+**AWS China**
+- AWSCHINA_ACCOUNT_NUMBER
+- AWSCHINA_ACCESS_KEY
+- AWSCHINA_SECRET_KEY
+
+**Azure**
+- ARM_SUBSCRIPTION_ID
+- ARM_DIRECTORY_ID (Tenant ID)
+- ARM_APPLICATION_ID (Client ID)
+- ARM_APPLICATION_KEY (Client Secret)
+- AZURE_REGION
+- AZURE_REGION2
+- AZURE_VNET_ID
+- AZURE_VNET_ID2
+- AZURE_VNG_VNET_ID (for VNG tests)
+- AZURE_VNG_SUBNET
+- AZURE_VNG
+
+**Azure Gov**
+- AZUREGOV_SUBSCRIPTION_ID
+- AZUREGOV_DIRECTORY_ID
+- AZUREGOV_APPLICATION_ID
+- AZUREGOV_APPLICATION_KEY
+
+**Azure China**
+- AZURECHINA_SUBSCRIPTION_ID
+- AZURECHINA_DIRECTORY_ID
+- AZURECHINA_APPLICATION_ID
+- AZURECHINA_APPLICATION_KEY
+
+**GCP**
+- GCP_ID (Project ID)
+- GCP_CREDENTIALS_FILEPATH
+- GCP_REGION
+- GCP_ZONE
+
+**OCI**
+- OCI_TENANCY_ID
+- OCI_USER_ID
+- OCI_COMPARTMENT_ID
+- OCI_API_KEY_FILEPATH
+- OCI_REGION
+
+**CloudN (for on-prem integration)**
+- CLOUDN_IP
+- CLOUDN_USERNAME
+- CLOUDN_PASSWORD
+- CLOUDN_DEVICE_NAME
+- CLOUDN_BGP_ASN
+- CLOUDN_LAN_INTERFACE_NEIGHBOR_IP
+- CLOUDN_LAN_INTERFACE_NEIGHBOR_BGP_ASN
+
+**Edge Platforms**
+- EDGE_CSP_USERNAME
+- EDGE_CSP_PASSWORD
+- EDGE_CSP_PROJECT_UUID
+- EDGE_CSP_COMPUTE_NODE_UUID
+- EDGE_CSP_TEMPLATE_UUID
+
+**Monitoring/Logging**
+- DATADOG_API_KEY (for Datadog agent tests)
+
+**Skip Flags (to disable specific tests)**
+- SKIP_ACCOUNT_AWS
+- SKIP_ACCOUNT_AZURE
+- SKIP_ACCOUNT_GCP
+- SKIP_ACCOUNT_OCI
+- SKIP_ACCOUNT_AWSGOV
+- SKIP_ACCOUNT_AZUREGOV
+- SKIP_ACCOUNT_AWSCHINA
+- SKIP_ACCOUNT_AZURECHINA
+- SKIP_[RESOURCE_NAME] (per-resource skip flags)
+
+#### 3.3.2 Configuration Files
+1. **.env.terratest** - Local testing environment variables
+2. **terratest/config/providers.yaml** - Provider configuration templates
+3. **terratest/config/test-suites.yaml** - Test suite definitions
+4. **terratest/config/resource-dependencies.yaml** - Resource dependency map
+
+### 3.4 Test Fixtures
+
+#### 3.4.1 Fixture Structure
+Each resource category will have dedicated fixture directories:
+```
+fixtures/[resource-category]/
+├── basic.tf                    # Minimal configuration
+├── full.tf                     # Complete configuration with all options
+├── variables.tf                # Input variables
+├── outputs.tf                  # Output values for validation
+├── providers.tf                # Provider configuration
+└── versions.tf                 # Terraform version constraints
+```
+
+#### 3.4.2 Fixture Templates
+- Use Go templates for dynamic value injection
+- Support multiple cloud provider configurations
+- Include validation outputs for assertions
+- Parameterize all resource names and IDs
+- Include commented examples of all options
+
+### 3.5 Test Execution
+
+#### 3.5.1 Local Execution
+```bash
+# Run all tests
+cd terratest
+go test -v -timeout 60m ./tests/...
+
+# Run specific resource tests
+go test -v -timeout 30m ./tests/account_test.go
+
+# Run with parallelization
+go test -v -timeout 60m -parallel 4 ./tests/...
+
+# Run specific cloud provider tests
+SKIP_ACCOUNT_AZURE=yes SKIP_ACCOUNT_GCP=yes SKIP_ACCOUNT_OCI=yes \
+go test -v ./tests/aws_*_test.go
+
+# Dry run (plan only, no apply)
+TERRATEST_DRY_RUN=true go test -v ./tests/...
+```
+
+#### 3.5.2 Docker Execution
+```bash
+# Build test container
+docker build -f terratest/docker/Dockerfile.terratest -t aviatrix-terratest .
+
+# Run tests in container
+docker run --rm \
+  -v $(pwd):/workspace \
+  -e AVIATRIX_CONTROLLER_IP \
+  -e AVIATRIX_USERNAME \
+  -e AVIATRIX_PASSWORD \
+  --env-file .env.terratest \
+  aviatrix-terratest \
+  go test -v -timeout 60m ./tests/...
+```
+
+#### 3.5.3 CI/CD Execution
+GitHub Actions workflow will:
+1. Detect changed resources
+2. Run relevant test suites
+3. Execute tests in parallel across cloud providers
+4. Generate test reports
+5. Upload coverage artifacts
+6. Clean up test resources
+7. Send notifications on failures
+
+### 3.6 Validation & Assertions
+
+#### 3.6.1 Resource State Validation
+- Verify Terraform state matches actual resource
+- Validate all computed attributes
+- Check resource IDs are set correctly
+- Verify tags and labels
+
+#### 3.6.2 API Validation
+- Query Aviatrix controller API
+- Verify resource configuration
+- Check relationship between resources
+- Validate security settings
+
+#### 3.6.3 Cloud Provider Validation
+- Query cloud provider APIs (AWS, Azure, GCP, OCI)
+- Verify infrastructure is created correctly
+- Validate networking configuration
+- Check security groups/firewall rules
+- Verify IAM/RBAC settings
+
+#### 3.6.4 Functional Validation
+- Test connectivity between resources
+- Validate routing tables
+- Check DNS resolution
+- Test encryption settings
+- Verify monitoring/logging integration
+
+### 3.7 Resource Cleanup
+
+#### 3.7.1 Automatic Cleanup
+- Use `defer terraform.Destroy()` in all tests
+- Implement retry logic for cleanup failures
+- Tag all test resources with unique identifiers
+- Track resource creation for cleanup
+
+#### 3.7.2 Manual Cleanup Script
+```bash
+# Clean up orphaned resources
+./terratest/scripts/cleanup_resources.sh
+
+# Clean up by age
+./terratest/scripts/cleanup_resources.sh --older-than 2h
+
+# Clean up by tag
+./terratest/scripts/cleanup_resources.sh --tag "terratest=true"
+```
+
+#### 3.7.3 Cost Control
+- Set resource TTL (time-to-live)
+- Monitor test resource costs
+- Alert on cost thresholds
+- Automatic shutdown of long-running tests
+
+## 4. Implementation Plan
+
+### 4.1 Phase 1: Foundation (Weeks 1-2)
+**Tasks:**
+1. Set up Terratest project structure
+2. Create common test helpers and utilities
+3. Implement provider configuration system
+4. Set up CI/CD pipeline for Terratest
+5. Create Docker containers for test execution
+6. Implement resource cleanup utilities
+7. Set up test reporting infrastructure
+
+**Deliverables:**
+- Terratest directory structure
+- Common utilities library
+- CI/CD workflow
+- Docker containers
+- Cleanup scripts
+- Documentation
+
+### 4.2 Phase 2: Tier 1 Resources (Weeks 3-4)
+**Resources to Test:**
+- Account management (4 resources)
+- Core gateway resources (8 resources)
+- VPC/Network resources (3 resources)
+- Essential data sources (5 data sources)
+
+**Deliverables:**
+- 15 resource test files
+- 5 data source test files
+- Complete fixtures for Tier 1
+- Test reports showing 100% coverage for Tier 1
+
+### 4.3 Phase 3: Tier 2 Resources (Weeks 5-6)
+**Resources to Test:**
+- AWS TGW suite (10 resources)
+- Peering resources (4 resources)
+- Site2Cloud resources (3 resources)
+- Related data sources (4 data sources)
+
+**Deliverables:**
+- 17 resource test files
+- 4 data source test files
+- Complete fixtures for Tier 2
+- Integration test scenarios for AWS TGW
+
+### 4.4 Phase 4: Tier 3 Resources (Weeks 7-8)
+**Resources to Test:**
+- Firewall resources (9 resources)
+- Distributed firewalling (7 resources)
+- Smart groups & domains (5 resources)
+- Related data sources (5 data sources)
+
+**Deliverables:**
+- 21 resource test files
+- 5 data source test files
+- Security validation tests
+- Complete fixtures for Tier 3
+
+### 4.5 Phase 5: Tier 4 & 5 Resources (Weeks 9-10)
+**Resources to Test:**
+- VPN resources (5 resources)
+- FQDN resources (4 resources)
+- Controller configuration (14 resources)
+- Monitoring & logging (7 resources)
+- Related data sources (4 data sources)
+
+**Deliverables:**
+- 30 resource test files
+- 4 data source test files
+- Complete fixtures for Tiers 4 & 5
+
+### 4.6 Phase 6: Tier 6 Resources (Weeks 11-12)
+**Resources to Test:**
+- Edge resources (16 resources)
+- Copilot resources (4 resources)
+- Advanced features (10 resources)
+- DCF & QoS resources (6 resources)
+- CloudN & connectivity (6 resources)
+- Remaining data sources (5 data sources)
+
+**Deliverables:**
+- 42 resource test files
+- 5 data source test files
+- Complete edge device testing
+- Advanced scenario tests
+
+### 4.7 Phase 7: Integration & Optimization (Weeks 13-14)
+**Tasks:**
+1. End-to-end integration test scenarios
+2. Multi-cloud integration tests
+3. Performance optimization
+4. Test parallelization tuning
+5. Flaky test identification and fixes
+6. Documentation completion
+7. Team training
+
+**Deliverables:**
+- Complete integration test suite
+- Performance benchmarks
+- Final documentation
+- Training materials
+- Test execution playbook
+
+### 4.8 Phase 8: Production Rollout (Week 15)
+**Tasks:**
+1. Production CI/CD integration
+2. Monitoring and alerting setup
+3. Test result dashboard
+4. Regression test suite
+5. Maintenance procedures
+6. Handoff to engineering team
+
+**Deliverables:**
+- Production-ready test framework
+- Complete test coverage (100%)
+- Monitoring dashboards
+- Maintenance documentation
+- Team handoff complete
+
+## 5. Test Organization
+
+### 5.1 Test Categories
+
+#### 5.1.1 By Resource Type
+- **Account Tests**: All account-related resources
+- **Gateway Tests**: Transit, spoke, edge gateways
+- **Networking Tests**: VPC, peering, TGW
+- **Security Tests**: Firewall, distributed firewalling
+- **VPN Tests**: VPN users, profiles, remote access
+- **Controller Tests**: Controller configuration
+- **Monitoring Tests**: Logging, monitoring agents
+- **Edge Tests**: Edge devices and platforms
+- **Data Source Tests**: All data sources
+
+#### 5.1.2 By Cloud Provider
+- **AWS Tests**: AWS-specific resources
+- **Azure Tests**: Azure-specific resources
+- **GCP Tests**: GCP-specific resources
+- **OCI Tests**: OCI-specific resources
+- **Multi-Cloud Tests**: Cross-cloud scenarios
+
+#### 5.1.3 By Test Type
+- **Unit Tests**: Individual resource testing
+- **Integration Tests**: Multi-resource scenarios
+- **E2E Tests**: Complete workflow testing
+- **Regression Tests**: Bug fix validation
+- **Performance Tests**: Scale and performance
+- **Security Tests**: Security compliance
+
+### 5.2 Test Naming Convention
+```go
+// Resource tests
+func TestAviatrix[ResourceName]_Basic(t *testing.T)
+func TestAviatrix[ResourceName]_FullConfig(t *testing.T)
+func TestAviatrix[ResourceName]_Update(t *testing.T)
+func TestAviatrix[ResourceName]_Import(t *testing.T)
+func TestAviatrix[ResourceName]_[SpecificScenario](t *testing.T)
+
+// Data source tests
+func TestAviatrix[DataSourceName]_Basic(t *testing.T)
+func TestAviatrix[DataSourceName]_Filter(t *testing.T)
+
+// Integration tests
+func TestIntegration_[Scenario](t *testing.T)
+```
+
+### 5.3 Test Tags
+Use build tags to categorize tests:
+```go
+//go:build integration
+// +build integration
+
+//go:build aws
+// +build aws
+
+//go:build azure
+// +build azure
+
+//go:build slow
+// +build slow
+```
+
+## 6. Reporting & Metrics
+
+### 6.1 Test Reports
+- JUnit XML reports for CI/CD integration
+- HTML coverage reports
+- Test execution time metrics
+- Resource cleanup status
+- Failure analysis reports
+
+### 6.2 Coverage Metrics
+- Percentage of resources tested
+- Percentage of data sources tested
+- Percentage of resource attributes validated
+- Test success rate
+- Flaky test identification
+
+### 6.3 Dashboard
+- Real-time test execution status
+- Historical test trends
+- Coverage visualization
+- Failure rate tracking
+- Resource cost tracking
+
+## 7. Quality Assurance
+
+### 7.1 Test Quality Standards
+- Every test must be deterministic
+- No test interdependencies
+- Complete resource cleanup
+- Proper error handling
+- Comprehensive assertions
+- Clear test documentation
+
+### 7.2 Code Review Process
+- All test code peer-reviewed
+- Test fixtures validated
+- Documentation reviewed
+- CI/CD integration verified
+
+### 7.3 Maintenance
+- Regular test updates for API changes
+- Quarterly test review
+- Flaky test remediation
+- Performance optimization
+- Documentation updates
+
+## 8. Documentation Requirements
+
+### 8.1 Developer Documentation
+- Terratest framework overview
+- How to write new tests
+- Test execution guide
+- Debugging guide
+- Fixture creation guide
+- Common patterns and utilities
+
+### 8.2 CI/CD Documentation
+- Pipeline configuration
+- Environment setup
+- Secret management
+- Test execution workflows
+- Failure handling
+
+### 8.3 User Documentation
+- Test coverage matrix
+- Resource compatibility matrix
+- Known limitations
+- Troubleshooting guide
+
+## 9. Success Criteria
+
+### 9.1 Coverage Goals
+- ✅ 100% of 142 resources have Terratest coverage
+- ✅ 100% of 23 data sources have Terratest coverage
+- ✅ All CRUD operations tested for each resource
+- ✅ Multi-cloud scenarios covered
+- ✅ Import functionality validated for all resources
+
+### 9.2 Quality Goals
+- ✅ 95%+ test pass rate
+- ✅ < 1% flaky test rate
+- ✅ Zero resource leaks
+- ✅ Complete resource cleanup on all paths
+- ✅ All tests run in parallel
+
+### 9.3 Performance Goals
+- ✅ Full test suite completes in < 2 hours
+- ✅ Individual resource tests < 10 minutes
+- ✅ Efficient resource utilization
+- ✅ Cost-effective test execution
+
+### 9.4 Integration Goals
+- ✅ CI/CD fully automated
+- ✅ PR validation with relevant tests
+- ✅ Nightly full regression suite
+- ✅ Test reports in all PRs
+- ✅ Coverage tracking over time
+
+## 10. Risk Management
+
+### 10.1 Technical Risks
+**Risk**: API rate limiting from cloud providers
+**Mitigation**: Implement retry logic, distribute tests, use multiple accounts
+
+**Risk**: Test resource costs
+**Mitigation**: Automatic cleanup, cost monitoring, resource TTL
+
+**Risk**: Flaky tests due to eventual consistency
+**Mitigation**: Retry logic, appropriate wait times, explicit readiness checks
+
+**Risk**: Test environment availability
+**Mitigation**: Multiple test environments, health checks, fallback options
+
+### 10.2 Schedule Risks
+**Risk**: Underestimated complexity
+**Mitigation**: Phased approach, early prototyping, buffer time
+
+**Risk**: Resource unavailability
+**Mitigation**: Clear priorities, parallel work streams, external dependencies identified early
+
+### 10.3 Quality Risks
+**Risk**: Incomplete test coverage
+**Mitigation**: Coverage tracking, automated coverage reports, regular reviews
+
+**Risk**: Test maintenance burden
+**Mitigation**: Good test design, reusable utilities, comprehensive documentation
+
+## 11. Dependencies
+
+### 11.1 External Dependencies
+- Aviatrix Controller (running and accessible)
+- Cloud provider accounts (AWS, Azure, GCP, OCI)
+- Cloud provider credentials and permissions
+- VPCs/VNets pre-created for testing
+- Terraform 1.6.6+
+- Go 1.23+
+- Docker
+- GitHub Actions
+
+### 11.2 Internal Dependencies
+- Existing test-infra setup
+- Provider source code
+- Documentation
+- CI/CD infrastructure
+
+## 12. Testing Best Practices
+
+### 12.1 Test Design Principles
+1. **Independence**: Each test runs independently
+2. **Repeatability**: Tests produce same results on repeated runs
+3. **Clarity**: Test intent is clear from name and code
+4. **Speed**: Tests run as fast as possible
+5. **Reliability**: Tests are not flaky
+6. **Cleanup**: All resources cleaned up after test
+
+### 12.2 Common Patterns
+1. **Setup-Execute-Validate-Cleanup**: Standard test flow
+2. **Retry with Backoff**: Handle eventual consistency
+3. **Resource Tagging**: Tag all resources for cleanup
+4. **Parallel Execution**: Run tests in parallel when possible
+5. **Conditional Skip**: Skip tests based on environment
+6. **Fixture Reuse**: Share common fixtures
+
+### 12.3 Anti-Patterns to Avoid
+- ❌ Test interdependencies
+- ❌ Hardcoded values
+- ❌ Missing cleanup
+- ❌ Insufficient assertions
+- ❌ Ignoring errors
+- ❌ Long-running tests without timeouts
+
+## 13. Appendix
+
+### 13.1 Resource Categories Summary
+- **Tier 1 (Core)**: 15 resources
+- **Tier 2 (Networking)**: 17 resources
+- **Tier 3 (Security)**: 21 resources
+- **Tier 4 (VPN/Remote)**: 9 resources
+- **Tier 5 (Config/Monitor)**: 20 resources
+- **Tier 6 (Edge/Advanced)**: 42 resources
+- **Data Sources**: 23 data sources
+- **Total**: 165 components (142 resources + 23 data sources)
+
+### 13.2 Test Execution Matrix
+| Provider | Resources | Data Sources | Test Time (Est.) | Cost (Est.) |
+|----------|-----------|--------------|------------------|-------------|
+| AWS      | 80        | 15           | 45 min           | $50/run     |
+| Azure    | 25        | 5            | 20 min           | $30/run     |
+| GCP      | 15        | 2            | 15 min           | $20/run     |
+| OCI      | 8         | 1            | 10 min           | $15/run     |
+| Multi    | 14        | 0            | 30 min           | $40/run     |
+| **Total**| **142**   | **23**       | **120 min**      | **$155/run**|
+
+### 13.3 Glossary
+- **Terratest**: Go library for infrastructure testing
+- **Fixture**: Terraform configuration template for testing
+- **CRUD**: Create, Read, Update, Delete operations
+- **E2E**: End-to-end testing
+- **HA**: High Availability
+- **DR**: Disaster Recovery
+- **TGW**: AWS Transit Gateway
+- **VNG**: Azure Virtual Network Gateway
+- **FQDN**: Fully Qualified Domain Name
+- **RBAC**: Role-Based Access Control
+- **DCF**: Distributed Cloud Firewall
+- **MWP**: Multi-tenant Web Protection
+- **QoS**: Quality of Service
+- **SLA**: Service Level Agreement
+
+### 13.4 References
+- Terratest Documentation: https://terratest.gruntwork.io/
+- Aviatrix Terraform Provider: https://registry.terraform.io/providers/AviatrixSystems/aviatrix/latest
+- Terraform Plugin SDK: https://www.terraform.io/plugin/sdkv2
+- Go Testing: https://golang.org/pkg/testing/
+- GitHub Actions: https://docs.github.com/en/actions
+
+---
+
+**Document Version**: 1.0
+**Last Updated**: 2025-10-02
+**Author**: Claude Code AI Assistant
+**Status**: Ready for Task Master Parsing and Implementation

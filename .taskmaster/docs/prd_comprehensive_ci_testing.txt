@@ -1,0 +1,559 @@
+# Product Requirements Document: Comprehensive CI/CD Testing Pipeline for Terraform Provider Aviatrix
+
+## Executive Summary
+
+This PRD outlines the implementation of a comprehensive, multi-stage CI/CD testing pipeline for the Terraform Provider Aviatrix, modeled after industry-standard practices from providers like Alibaba Cloud Terraform Provider. The goal is to ensure every pull request passes rigorous quality gates including unit tests, integration tests, security scans, code quality checks, and multi-cloud acceptance tests before merging.
+
+## Background
+
+### Current State
+- Basic GitHub Actions workflow (`.github/workflows/go.yml`) with:
+  - Build verification
+  - Basic unit tests (`go test -v ./...`)
+  - Pre-commit hooks
+  - golangci-lint (standard and strict)
+  - Path-based change detection
+- Existing test infrastructure in `test-infra/` directory
+- Extensive acceptance test suite with cloud provider support (AWS, Azure, GCP, OCI)
+- Docker support for containerized testing (`.github/workflows/test-matrix.yml` partially implemented)
+
+### Problem Statement
+1. **Insufficient test coverage enforcement**: No automated coverage reporting or thresholds
+2. **No multi-version Go testing**: Only tests against single Go version
+3. **Limited integration testing in CI**: Acceptance tests not running automatically on PRs
+4. **No security scanning**: Missing vulnerability detection and SAST tools
+5. **Incomplete Docker-based testing**: Matrix testing pipeline exists but incomplete
+6. **No test result aggregation**: Difficult to track overall test health
+7. **Missing parallelization**: Tests could run faster with proper matrix strategies
+8. **No nightly/scheduled comprehensive testing**: Only PR-triggered basic tests
+
+## Goals and Objectives
+
+### Primary Goals
+1. **100% Pull Request Quality Assurance**: Every PR must pass all quality gates before merge
+2. **Multi-Environment Testing**: Test across multiple Go versions, cloud providers, and configurations
+3. **Security First**: Integrate security scanning as a mandatory check
+4. **Fast Feedback**: Optimize test execution time through parallelization and smart change detection
+5. **Comprehensive Coverage**: Unit, integration, acceptance, and security testing in one pipeline
+
+### Success Metrics
+- All PRs blocked until passing all required checks
+- Test execution time < 30 minutes for typical PRs
+- Security vulnerabilities detected before merge
+- Code coverage tracked and reported
+- Zero false positives causing developer friction
+
+## Requirements
+
+### 1. Enhanced Change Detection
+**Priority: P0**
+
+- Detect changes in:
+  - Go source files (`**/*.go`, `go.mod`, `go.sum`)
+  - Test files (`**/*_test.go`, `test-infra/**`)
+  - Configuration files (`.golangci*.toml`, `Dockerfile`, etc.)
+  - Documentation (`docs/**`, `*.md`)
+- Skip test jobs when only documentation changes
+- Smart dependency tracking (e.g., if core library changes, run all tests)
+
+### 2. Multi-Version Go Testing
+**Priority: P0**
+
+- Test matrix across Go versions:
+  - Current stable: Go 1.23
+  - Next version: Go 1.24
+  - Optional: Previous LTS versions for compatibility
+- Each version should run:
+  - Unit tests with race detector (`-race`)
+  - Code coverage collection (`-coverprofile`)
+  - JUnit XML report generation (for GitHub integration)
+- Cache Go modules per version for speed
+
+### 3. Comprehensive Unit Testing
+**Priority: P0**
+
+**Features:**
+- Run tests with race condition detection
+- Generate coverage reports (XML, HTML, plain text)
+- Upload coverage to GitHub Actions artifacts
+- Generate JUnit XML for test reporting
+- Set minimum coverage threshold (e.g., 60%)
+- Parallel test execution with appropriate `-parallel` flag
+
+**Tools to integrate:**
+- `go test` with `-race`, `-coverprofile`, `-timeout`
+- `go-junit-report` for JUnit XML generation
+- `gocov` and `gocov-xml` for coverage transformation
+- `go tool cover` for HTML reports
+
+### 4. Docker-Based Testing Infrastructure
+**Priority: P0**
+
+**Multi-stage Dockerfile targets:**
+1. `builder`: Base image with Go toolchain and dependencies
+2. `test`: Unit test execution environment
+3. `ci-test`: Integration/acceptance test environment with cloud CLIs
+4. `production`: Minimal runtime image for provider binary
+
+**Requirements:**
+- Use Docker BuildKit for layer caching
+- Cache layers in GitHub Actions cache
+- Support for multi-architecture builds (amd64, arm64)
+- Include all cloud provider CLIs (aws-cli, az-cli, gcloud, oci-cli)
+- Inject credentials securely via environment variables
+
+### 5. Integration Testing Matrix
+**Priority: P0**
+
+**Cloud Provider Matrix:**
+- AWS (default region: us-east-1)
+- Azure (multiple regions support)
+- GCP (with service account auth)
+- OCI (Oracle Cloud Infrastructure)
+
+**Per-provider test requirements:**
+- Separate test jobs for each provider
+- Conditional execution based on secret availability
+- Skip variables for unused providers (e.g., `SKIP_ACCOUNT_AZURE=yes`)
+- Timeout: 60 minutes per provider
+- Parallel execution across providers
+
+**Test targets:**
+- Gateway resources (basic connectivity)
+- Transit Gateway (routing validation)
+- Spoke Gateway (spoke-transit attachment)
+- Firewall/FireNet (security features)
+- VPC/VNET resources
+
+### 6. Security Scanning
+**Priority: P0**
+
+**Static Analysis Security Testing (SAST):**
+- **Gosec**: Go security checker
+  - Scan all Go code for security issues
+  - Generate SARIF format output
+  - Upload to GitHub Code Scanning
+  - Block PR if high-severity issues found
+
+**Dependency Scanning:**
+- **govulncheck**: Check for known vulnerabilities in dependencies
+- **Trivy**: Container image vulnerability scanning
+  - Scan Docker images before use
+  - Check for CVEs in base images and dependencies
+
+**Secrets Detection:**
+- **TruffleHog** or **Gitleaks**: Scan for accidentally committed secrets
+- Check all commits in PR for sensitive data
+
+### 7. Code Quality Checks
+**Priority: P1**
+
+**Enhanced linting:**
+- golangci-lint with standard config (`.golangci.toml`)
+- golangci-lint strict mode (`.golangci_strict.toml`)
+- `go vet` for suspicious constructs
+- `gofmt` and `goimports` for formatting
+- Pre-commit hooks validation
+
+**Additional checks:**
+- Spell checking for documentation (`codespell`)
+- Markdown linting for docs
+- Terraform configuration validation in `test-infra/`
+
+### 8. Test Results Aggregation and Reporting
+**Priority: P1**
+
+**Requirements:**
+- Collect all test artifacts:
+  - Unit test results (JUnit XML)
+  - Coverage reports (XML, HTML)
+  - Integration test logs
+  - Security scan results (SARIF)
+- Generate comprehensive test summary in GitHub Step Summary
+- Upload all artifacts for debugging
+- Retention: 90 days for artifacts
+
+**Summary format:**
+```markdown
+# Test Results Summary
+
+## Unit Tests
+- ✅ Go 1.23: 1,234 passed, 0 failed
+- ✅ Go 1.24: 1,234 passed, 0 failed
+- Coverage: 68.5% (threshold: 60%)
+
+## Integration Tests
+- ✅ AWS: 45 tests passed
+- ✅ Azure: 38 tests passed
+- ⚠️ GCP: Skipped (no credentials)
+- ✅ OCI: 12 tests passed
+
+## Security Scans
+- ✅ Gosec: No issues found
+- ✅ Govulncheck: No vulnerabilities
+- ✅ Trivy: No critical CVEs
+
+## Code Quality
+- ✅ golangci-lint: Passed
+- ✅ golangci-lint (strict): Passed
+- ✅ Pre-commit: Passed
+```
+
+### 9. Nightly/Scheduled Comprehensive Testing
+**Priority: P2**
+
+**Schedule:**
+- Nightly at 2 AM UTC (`cron: '0 2 * * *'`)
+- Full test suite execution:
+  - All cloud providers (no skips)
+  - Extended timeout (4 hours)
+  - All acceptance tests (`./runAccTest.sh ALL`)
+
+**Notifications:**
+- Slack/email alerts on failures
+- Weekly summary report of test health
+
+### 10. Performance and Optimization
+**Priority: P2**
+
+**Optimizations:**
+- Parallel job execution (max 10 concurrent jobs)
+- Go module caching per job
+- Docker layer caching with GitHub Actions cache
+- Skip redundant jobs based on path changes
+- Fail-fast: false for integration tests (allow all to complete)
+- Matrix strategy for parallel cloud provider tests
+
+### 11. Required GitHub Secrets
+**Priority: P0**
+
+**Cloud Provider Credentials:**
+```
+# AWS
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_DEFAULT_REGION
+AWS_ACCOUNT_NUMBER
+
+# Azure
+ARM_CLIENT_ID
+ARM_CLIENT_SECRET
+ARM_SUBSCRIPTION_ID
+ARM_TENANT_ID
+
+# GCP
+GOOGLE_APPLICATION_CREDENTIALS (base64 encoded JSON)
+GOOGLE_PROJECT
+
+# OCI
+OCI_USER_ID
+OCI_TENANCY_ID
+OCI_FINGERPRINT
+OCI_PRIVATE_KEY_PATH (base64 encoded)
+OCI_REGION
+
+# Aviatrix Controller
+AVIATRIX_CONTROLLER_IP
+AVIATRIX_USERNAME
+AVIATRIX_PASSWORD
+```
+
+## Technical Architecture
+
+### Workflow Structure
+
+```
+.github/workflows/
+├── ci.yml (main PR workflow)
+├── test-matrix.yml (integration testing - enhanced)
+├── security.yml (security scans)
+├── nightly.yml (comprehensive scheduled tests)
+└── release.yml (existing, untouched)
+```
+
+### Main CI Workflow (`ci.yml`)
+
+```yaml
+name: Continuous Integration
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  1. changes (path detection)
+  2. unit-tests (matrix: Go 1.23, 1.24)
+  3. code-quality (linting, formatting)
+  4. security-scan (Gosec, govulncheck, secrets)
+  5. docker-build (multi-stage builds)
+  6. integration-tests (matrix: aws, azure, gcp, oci)
+  7. test-summary (aggregate results)
+```
+
+### Integration Testing Architecture
+
+**Infrastructure Setup:**
+1. Terraform init in `test-infra/`
+2. Terraform apply to create test VPCs/VNETs
+3. Export environment variables (`source ./cmdExportOutput.sh`)
+4. Run acceptance tests via Docker container
+
+**Per-Provider Execution:**
+```bash
+docker run --rm \
+  -v $(pwd)/test-results:/app/test-results \
+  -v $(pwd)/test-infra:/app/test-infra \
+  -e TF_ACC=1 \
+  -e [CLOUD_CREDENTIALS] \
+  -e SKIP_ACCOUNT_[OTHER_PROVIDERS]=yes \
+  terraform-provider-aviatrix:ci-test \
+  sh -c "cd /app/test-infra && terraform init && terraform apply -auto-approve && \
+         source ./cmdExportOutput.sh && cd /app && \
+         ./test-infra/runAccTest.sh [ProviderTestTarget]"
+```
+
+### Dockerfile Enhancements
+
+**Required stages:**
+```dockerfile
+# Stage 1: Builder
+FROM golang:1.23-alpine AS builder
+RUN apk add --no-cache git make bash
+WORKDIR /app
+COPY go.* ./
+RUN go mod download
+COPY . .
+RUN make build
+
+# Stage 2: Test environment
+FROM builder AS test
+RUN go install github.com/jstemmer/go-junit-report/v2@latest
+RUN go install github.com/axw/gocov/gocov@latest
+RUN go install github.com/AlekSi/gocov-xml@latest
+CMD ["go", "test", "-v", "-race", "./..."]
+
+# Stage 3: CI test environment (with cloud CLIs)
+FROM builder AS ci-test
+RUN apk add --no-cache terraform aws-cli python3 py3-pip curl
+RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | \
+    tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
+    apt-key --keyring /usr/share/keyrings/cloud.google.gpg add - && \
+    apt-get update && apt-get install -y google-cloud-sdk
+COPY --from=builder /app /app
+WORKDIR /app
+
+# Stage 4: Production
+FROM alpine:latest AS production
+RUN apk add --no-cache ca-certificates
+COPY --from=builder /app/terraform-provider-aviatrix /usr/local/bin/
+ENTRYPOINT ["/usr/local/bin/terraform-provider-aviatrix"]
+```
+
+## Implementation Plan
+
+### Phase 1: Foundation (Week 1)
+**Tasks:**
+1. Create enhanced `Dockerfile` with all stages
+2. Implement multi-version Go unit testing
+3. Add coverage reporting and JUnit XML generation
+4. Setup Docker BuildKit caching
+
+### Phase 2: Security & Quality (Week 1-2)
+**Tasks:**
+1. Integrate Gosec security scanning
+2. Add govulncheck for dependency vulnerabilities
+3. Implement Trivy container scanning
+4. Add secrets detection (TruffleHog/Gitleaks)
+
+### Phase 3: Integration Testing (Week 2-3)
+**Tasks:**
+1. Complete Docker-based integration test matrix
+2. Configure cloud provider authentication
+3. Implement per-provider test isolation
+4. Add test result collection and logging
+
+### Phase 4: Reporting & Optimization (Week 3-4)
+**Tasks:**
+1. Build test results aggregation
+2. Create GitHub Step Summary reports
+3. Optimize caching strategy
+4. Implement fail-fast and timeout controls
+
+### Phase 5: Nightly & Monitoring (Week 4)
+**Tasks:**
+1. Create nightly comprehensive test workflow
+2. Setup notifications for failures
+3. Add test health dashboards
+4. Document runbooks for common failures
+
+## Testing Strategy
+
+### Test Coverage Targets
+- Unit test coverage: >= 60%
+- Integration test coverage: >= 80% of resources
+- Security scan coverage: 100% of codebase
+- Multi-cloud testing: AWS (required), Azure/GCP/OCI (optional based on credentials)
+
+### Test Isolation
+- Each cloud provider test runs in isolated Docker container
+- Separate test infrastructure per provider
+- Cleanup after test completion (terraform destroy)
+- No cross-provider dependencies
+
+### Failure Handling
+- Continue on error for integration tests (fail-fast: false)
+- Collect all artifacts even on failure
+- Upload logs for debugging
+- Clear error messages in PR comments
+
+## Success Criteria
+
+### Must Have (P0)
+- ✅ All PRs require passing unit tests on Go 1.23 and 1.24
+- ✅ Security scans block PRs with high-severity issues
+- ✅ Docker-based integration tests for at least AWS
+- ✅ Test result aggregation and reporting
+- ✅ Code coverage reporting >= 60%
+
+### Should Have (P1)
+- ✅ Integration tests for Azure, GCP, OCI (when credentials available)
+- ✅ Nightly comprehensive test runs
+- ✅ Performance optimization (< 30 min for PR tests)
+- ✅ Pre-commit hook validation in CI
+
+### Nice to Have (P2)
+- ✅ Test flakiness detection and reporting
+- ✅ Historical test performance tracking
+- ✅ Automatic issue creation for failing nightly tests
+- ✅ Test parallelization optimization
+
+## Risks and Mitigations
+
+| Risk | Impact | Probability | Mitigation |
+|------|--------|-------------|------------|
+| Cloud provider credentials not available in CI | High | Medium | Make integration tests optional; require at least AWS |
+| Test execution timeout in CI | Medium | High | Implement aggressive timeout controls; optimize test parallelization |
+| False positive security scans | Medium | Medium | Configure Gosec exceptions; manual review process |
+| Docker build failures | High | Low | Implement multi-stage fallbacks; cache aggressively |
+| Flaky integration tests | High | Medium | Retry mechanism; test isolation; proper cleanup |
+
+## Open Questions
+
+1. **Coverage threshold enforcement**: Should PRs be blocked if coverage decreases?
+   - **Recommendation**: Start with reporting only, enforce after baseline established
+
+2. **Integration test requirements**: Should all cloud providers be mandatory?
+   - **Recommendation**: AWS mandatory, others optional based on secret availability
+
+3. **Test execution budget**: What's the acceptable CI execution time?
+   - **Recommendation**: 30 minutes for PR tests, 4 hours for nightly
+
+4. **Artifact retention**: How long to keep test artifacts?
+   - **Recommendation**: 90 days for PR artifacts, 1 year for nightly
+
+## References
+
+- Alibaba Cloud Terraform Provider: https://github.com/aliyun/terraform-provider-alicloud
+- HashiCorp Terraform Provider Best Practices
+- GitHub Actions Documentation
+- Go Testing Best Practices
+- OWASP Secure Coding Guidelines
+
+## Appendix
+
+### A. Example GitHub Actions Workflow Structure
+
+```yaml
+name: CI Test Matrix
+
+on:
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 2 * * *'
+
+env:
+  GO_VERSION: "1.23"
+  TERRAFORM_VERSION: "1.6.6"
+
+jobs:
+  changes:
+    # Path filtering logic
+
+  unit-tests:
+    needs: changes
+    if: needs.changes.outputs.go_files == 'true'
+    strategy:
+      matrix:
+        go-version: ["1.23", "1.24"]
+    # Unit test execution
+
+  security-scan:
+    needs: changes
+    if: needs.changes.outputs.relevant_files == 'true'
+    # Gosec, govulncheck, secrets detection
+
+  docker-build:
+    needs: changes
+    strategy:
+      matrix:
+        target: [builder, test, ci-test, production]
+    # Multi-stage Docker builds
+
+  integration-tests:
+    needs: [changes, docker-build]
+    if: needs.changes.outputs.test_files == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: [aws, azure, gcp, oci]
+    # Cloud provider acceptance tests
+
+  test-summary:
+    needs: [unit-tests, integration-tests, security-scan]
+    if: always()
+    # Aggregate and report results
+```
+
+### B. Required Repository Settings
+
+**Branch Protection Rules (main/master):**
+- ✅ Require status checks to pass before merging
+  - unit-tests (Go 1.23)
+  - unit-tests (Go 1.24)
+  - security-scan
+  - code-quality
+  - integration-tests (aws) - if credentials available
+- ✅ Require branches to be up to date before merging
+- ✅ Require linear history
+- ✅ Include administrators
+
+**GitHub Actions Permissions:**
+- `contents: read` - Read repository content
+- `pull-requests: read` - Read PR information
+- `actions: write` - Write workflow status
+- `security-events: write` - Upload SARIF files
+
+### C. Test Execution Time Estimates
+
+| Test Type | Go 1.23 | Go 1.24 | Total (Parallel) |
+|-----------|---------|---------|------------------|
+| Unit Tests | 5 min | 5 min | 5 min |
+| Linting | 2 min | - | 2 min |
+| Security Scan | 3 min | - | 3 min |
+| Docker Build | 8 min | - | 8 min |
+| AWS Integration | 15 min | - | 15 min |
+| Azure Integration | 15 min | - | 15 min |
+| **Total (Sequential)** | - | - | **73 min** |
+| **Total (Optimized Parallel)** | - | - | **~25 min** |
+
+---
+
+**Document Version:** 1.0
+**Last Updated:** 2025-10-02
+**Owner:** DevOps/Infrastructure Team
+**Approvers:** Engineering Lead, Security Lead
