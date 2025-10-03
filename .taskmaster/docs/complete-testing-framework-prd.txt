@@ -1,0 +1,2434 @@
+# Product Requirements Document: Complete Testing Framework for Terraform Provider Aviatrix
+
+## Document Information
+**Version:** 1.0
+**Date:** October 2, 2025
+**Status:** Draft
+**Owner:** Engineering Team
+**Product:** Terraform Provider Aviatrix Testing Framework
+
+---
+
+## Executive Summary
+
+This PRD defines the requirements for achieving 100% test coverage across the Terraform Provider Aviatrix codebase. Building upon the completed foundational test infrastructure (Task #11), this document outlines the comprehensive testing strategy to ensure reliability, maintainability, and quality across all 133 provider resources and 23 data sources.
+
+**Goal:** Achieve and maintain 100% test coverage with automated validation, performance testing, and continuous quality assurance.
+
+**Success Metrics:**
+- Unit test coverage: 100% for all Go packages
+- Acceptance test coverage: 100% for all 133 resources
+- Integration test coverage: 100% for all 23 data sources
+- End-to-end scenario coverage: 95% of common workflows
+- CI/CD pipeline success rate: >99%
+- Test execution time: <30 minutes for full suite
+- Zero critical bugs in production releases
+
+---
+
+## 1. Background and Context
+
+### 1.1 Current State
+**Completed Infrastructure (Task #11):**
+- Multi-stage Docker builds for isolated test environments
+- GitHub Actions CI/CD pipeline with matrix testing
+- Docker Compose orchestration for multi-cloud testing
+- Environment variable management for AWS, Azure, GCP, OCI
+- Base test utilities and helper functions
+- Comprehensive smoke tests (14 tests, all passing)
+- Test logging and artifact management infrastructure
+
+**Current Coverage:**
+- Provider resources validated: 133
+- Data sources validated: 23
+- Smoke tests: 14/14 passing
+- Test execution time: 0.013s (smoke tests only)
+- Infrastructure validation: Complete
+
+### 1.2 Gap Analysis
+**Missing Coverage:**
+- Unit tests for individual resource CRUD operations
+- Acceptance tests for each resource lifecycle
+- Integration tests for multi-resource scenarios
+- Performance and load testing
+- Security and compliance testing
+- Chaos engineering and failure injection
+- Documentation and example validation
+- Cross-provider compatibility testing
+- Upgrade and migration path testing
+- Regression test suites
+
+### 1.3 Business Drivers
+- **Reliability:** Prevent production incidents through comprehensive testing
+- **Quality:** Ensure consistent behavior across all cloud providers
+- **Velocity:** Enable faster feature development with confidence
+- **Compliance:** Meet enterprise security and quality standards
+- **Customer Trust:** Demonstrate commitment to quality and reliability
+- **Cost Reduction:** Reduce support burden through proactive issue detection
+
+---
+
+## 2. Product Vision and Objectives
+
+### 2.1 Vision Statement
+Create a world-class testing framework that ensures every Terraform resource, data source, and provider configuration is thoroughly validated across all supported cloud platforms, enabling rapid iteration while maintaining production reliability.
+
+### 2.2 Strategic Objectives
+1. **Comprehensive Coverage:** Test every code path, resource, and configuration option
+2. **Multi-Cloud Validation:** Ensure consistent behavior across AWS, Azure, GCP, and OCI
+3. **Performance Assurance:** Validate scalability and resource efficiency
+4. **Security Hardening:** Test security controls and compliance requirements
+5. **Developer Experience:** Make testing easy, fast, and integrated into workflow
+6. **Continuous Quality:** Automate validation at every stage of development
+
+### 2.3 Success Criteria
+**Technical Metrics:**
+- Line coverage: 100% (excluding vendor code)
+- Branch coverage: 95%
+- Function coverage: 100%
+- Resource coverage: 133/133 (100%)
+- Data source coverage: 23/23 (100%)
+- Test execution time: <30 minutes (full suite)
+- Parallel test efficiency: >80%
+
+**Quality Metrics:**
+- Production bug escape rate: <0.1%
+- Mean time to detect (MTTD): <1 hour
+- False positive rate: <5%
+- Test flakiness: <1%
+- Code review coverage: 100%
+
+**Process Metrics:**
+- PR test execution time: <15 minutes
+- Nightly test suite success rate: >99%
+- Test maintenance overhead: <10% of development time
+- Documentation coverage: 100% of public APIs
+
+---
+
+## 3. Detailed Requirements
+
+## 3.1 Unit Testing Framework
+
+### 3.1.1 Resource Unit Tests
+**Requirement ID:** UT-001
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Implement unit tests for all 133 provider resources covering CRUD operations, validation logic, state management, and error handling.
+
+**Acceptance Criteria:**
+- [ ] Each resource has dedicated test file (e.g., `resource_aviatrix_gateway_unit_test.go`)
+- [ ] Test coverage for Create, Read, Update, Delete operations
+- [ ] Validation of input parameters and constraints
+- [ ] Error handling and edge cases
+- [ ] Schema validation and defaults
+- [ ] State import/export functionality
+- [ ] Timeout and retry logic
+- [ ] Concurrent operation safety
+- [ ] Memory leak detection
+- [ ] Resource naming and tagging
+
+**Test Categories per Resource:**
+1. Schema Validation Tests
+   - Required field validation
+   - Optional field defaults
+   - Type validation (string, int, bool, list, map)
+   - Format validation (CIDR, IP, ARN, etc.)
+   - Constraint validation (min/max, regex patterns)
+
+2. CRUD Operation Tests
+   - Create with valid inputs
+   - Create with invalid inputs (negative tests)
+   - Read existing resource
+   - Read non-existent resource
+   - Update mutable fields
+   - Update immutable fields (expect error)
+   - Delete existing resource
+   - Delete non-existent resource (idempotent)
+
+3. State Management Tests
+   - State serialization/deserialization
+   - State migration (version upgrades)
+   - Import from existing infrastructure
+   - Partial state handling
+   - Computed field population
+
+4. Error Handling Tests
+   - API timeout scenarios
+   - Network failures
+   - Authentication failures
+   - Rate limiting
+   - Concurrent modification conflicts
+   - Quota exceeded errors
+
+**Example Test Structure:**
+```go
+func TestResourceAviatrixGateway_Create(t *testing.T) {
+    testCases := []struct {
+        name           string
+        config         map[string]interface{}
+        expectedError  string
+        mockResponses  []mockResponse
+    }{
+        {
+            name: "valid_aws_gateway",
+            config: map[string]interface{}{
+                "cloud_type":   1,
+                "account_name": "aws-account",
+                "gw_name":      "test-gw",
+                "vpc_id":       "vpc-123456",
+                "vpc_reg":      "us-east-1",
+                "gw_size":      "t3.medium",
+                "subnet":       "10.0.1.0/24",
+            },
+            expectedError: "",
+        },
+        {
+            name: "missing_required_field",
+            config: map[string]interface{}{
+                "cloud_type":   1,
+                "account_name": "aws-account",
+                // missing gw_name
+            },
+            expectedError: "gw_name is required",
+        },
+        // ... more test cases
+    }
+
+    for _, tc := range testCases {
+        t.Run(tc.name, func(t *testing.T) {
+            // Test implementation
+        })
+    }
+}
+```
+
+**Coverage Target:** 100% line coverage per resource file
+
+**Implementation Effort:**
+- Estimated: 3-4 hours per resource
+- Total: ~530 hours (133 resources × 4 hours)
+- Timeline: 12-16 weeks with 3-4 engineers
+
+---
+
+### 3.1.2 Data Source Unit Tests
+**Requirement ID:** UT-002
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Implement unit tests for all 23 data sources covering query operations, filtering, and error handling.
+
+**Acceptance Criteria:**
+- [ ] Each data source has dedicated test file
+- [ ] Test coverage for Read operations with various filters
+- [ ] Validation of query parameters
+- [ ] Error handling for not found scenarios
+- [ ] Schema validation
+- [ ] Multiple result handling
+- [ ] Performance benchmarks
+
+**Test Categories per Data Source:**
+1. Query Tests
+   - Query by ID
+   - Query by name
+   - Query with filters
+   - Query with no results
+   - Query with multiple results
+
+2. Filter Tests
+   - Single filter criterion
+   - Multiple filter criteria
+   - Complex filter expressions
+   - Case sensitivity
+   - Wildcard matching
+
+3. Error Handling Tests
+   - Resource not found
+   - Invalid filter syntax
+   - API errors
+   - Timeout scenarios
+
+**Coverage Target:** 100% line coverage per data source file
+
+**Implementation Effort:**
+- Estimated: 2-3 hours per data source
+- Total: ~58 hours (23 data sources × 2.5 hours)
+- Timeline: 2-3 weeks with 2 engineers
+
+---
+
+### 3.1.3 Provider Configuration Tests
+**Requirement ID:** UT-003
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Test provider configuration, authentication, and client initialization across all cloud platforms.
+
+**Acceptance Criteria:**
+- [ ] Test provider schema validation
+- [ ] Test authentication methods (API key, service principal, etc.)
+- [ ] Test controller connection establishment
+- [ ] Test version compatibility checks
+- [ ] Test retry and timeout configurations
+- [ ] Test environment variable handling
+- [ ] Test credential precedence
+
+**Test Categories:**
+1. Configuration Tests
+   - Required configuration validation
+   - Optional configuration defaults
+   - Configuration precedence (env vars vs. config)
+   - Invalid configuration handling
+
+2. Authentication Tests
+   - Valid credentials
+   - Invalid credentials
+   - Expired credentials
+   - Missing credentials
+   - Credential rotation
+
+3. Client Initialization Tests
+   - Controller connectivity
+   - Version compatibility
+   - CID (session) management
+   - Concurrent client creation
+
+**Coverage Target:** 100% of provider.go and client initialization code
+
+**Implementation Effort:**
+- Estimated: 40 hours
+- Timeline: 1 week with 1 engineer
+
+---
+
+## 3.2 Acceptance Testing Framework
+
+### 3.2.1 Resource Acceptance Tests
+**Requirement ID:** AT-001
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Implement end-to-end acceptance tests for all 133 resources that validate real resource creation, updates, and deletion on actual cloud platforms.
+
+**Acceptance Criteria:**
+- [ ] Each resource has acceptance test file (e.g., `resource_aviatrix_gateway_test.go`)
+- [ ] Tests run against real Aviatrix controller and cloud providers
+- [ ] Tests validate complete resource lifecycle
+- [ ] Tests verify attribute persistence
+- [ ] Tests handle cleanup and resource deletion
+- [ ] Tests are idempotent and can be re-run
+- [ ] Tests detect and report dangling resources
+
+**Test Pattern:**
+```go
+func TestAccAviatrixGateway_basic(t *testing.T) {
+    resourceName := "aviatrix_gateway.test"
+
+    resource.Test(t, resource.TestCase{
+        PreCheck:     func() { testAccPreCheck(t) },
+        Providers:    testAccProviders,
+        CheckDestroy: testAccCheckAviatrixGatewayDestroy,
+        Steps: []resource.TestStep{
+            {
+                Config: testAccAviatrixGatewayConfigBasic(),
+                Check: resource.ComposeTestCheckFunc(
+                    testAccCheckAviatrixGatewayExists(resourceName),
+                    resource.TestCheckResourceAttr(resourceName, "gw_name", "test-gateway"),
+                    resource.TestCheckResourceAttr(resourceName, "cloud_type", "1"),
+                    resource.TestCheckResourceAttr(resourceName, "gw_size", "t3.medium"),
+                ),
+            },
+            {
+                Config: testAccAviatrixGatewayConfigUpdate(),
+                Check: resource.ComposeTestCheckFunc(
+                    testAccCheckAviatrixGatewayExists(resourceName),
+                    resource.TestCheckResourceAttr(resourceName, "gw_size", "t3.large"),
+                ),
+            },
+            {
+                ResourceName:      resourceName,
+                ImportState:       true,
+                ImportStateVerify: true,
+            },
+        },
+    })
+}
+```
+
+**Resource-Specific Test Scenarios:**
+
+1. **Gateway Resources:**
+   - Basic gateway creation
+   - Gateway with HA
+   - Gateway with VPN enabled
+   - Gateway with FQDN filtering
+   - Gateway resize
+   - Gateway upgrade
+
+2. **Transit Gateway Resources:**
+   - Transit gateway with BGP
+   - Transit gateway peering
+   - Transit gateway with FireNet
+   - Spoke-to-transit attachment
+
+3. **VPC/Network Resources:**
+   - VPC creation with custom CIDR
+   - VPC with multiple subnets
+   - VPC peering
+   - Transit VPC
+
+4. **Security Resources:**
+   - Firewall rules
+   - Security groups
+   - FQDN tags
+   - Distributed firewalling policies
+
+5. **Controller Configuration Resources:**
+   - Email configuration
+   - Logging configuration
+   - Security settings
+   - BGP communities
+
+**Cloud-Specific Test Matrix:**
+```
+Resource Type          | AWS | Azure | GCP | OCI
+--------------------- | --- | ----- | --- | ---
+Gateway               | ✓   | ✓     | ✓   | ✓
+Transit Gateway       | ✓   | ✓     | ✓   | ✓
+Spoke Gateway         | ✓   | ✓     | ✓   | ✓
+VPC/VNet              | ✓   | ✓     | ✓   | ✓
+Peering               | ✓   | ✓     | ✓   | ✗
+Site2Cloud            | ✓   | ✓     | ✓   | ✓
+FireNet               | ✓   | ✓     | ✓   | ✗
+Edge Gateway          | ✗   | ✗     | ✗   | ✗
+```
+
+**Test Environment Requirements:**
+- Dedicated test accounts for each cloud provider
+- Isolated test VPCs/VNets to prevent conflicts
+- Automated resource cleanup scripts
+- Cost monitoring and alerting
+- Test data isolation
+
+**Coverage Target:**
+- 100% of resources (133/133)
+- All cloud providers where applicable
+- Basic + advanced configuration scenarios
+
+**Implementation Effort:**
+- Estimated: 4-6 hours per resource
+- Total: ~665 hours (133 resources × 5 hours)
+- Timeline: 16-20 weeks with 3-4 engineers
+
+---
+
+### 3.2.2 Data Source Acceptance Tests
+**Requirement ID:** AT-002
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Implement acceptance tests for all 23 data sources that validate data retrieval from real infrastructure.
+
+**Acceptance Criteria:**
+- [ ] Each data source has acceptance test
+- [ ] Tests query real cloud resources
+- [ ] Tests validate data accuracy
+- [ ] Tests handle not-found scenarios
+- [ ] Tests verify computed attributes
+
+**Test Pattern:**
+```go
+func TestAccDataSourceAviatrixGateway_basic(t *testing.T) {
+    resourceName := "data.aviatrix_gateway.test"
+
+    resource.Test(t, resource.TestCase{
+        PreCheck:  func() { testAccPreCheck(t) },
+        Providers: testAccProviders,
+        Steps: []resource.TestStep{
+            {
+                Config: testAccDataSourceAviatrixGatewayConfig(),
+                Check: resource.ComposeTestCheckFunc(
+                    resource.TestCheckResourceAttrSet(resourceName, "gw_name"),
+                    resource.TestCheckResourceAttrSet(resourceName, "vpc_id"),
+                    resource.TestCheckResourceAttrSet(resourceName, "cloud_type"),
+                ),
+            },
+        },
+    })
+}
+```
+
+**Coverage Target:** 100% of data sources (23/23)
+
+**Implementation Effort:**
+- Estimated: 2-3 hours per data source
+- Total: ~58 hours (23 data sources × 2.5 hours)
+- Timeline: 2-3 weeks with 2 engineers
+
+---
+
+### 3.2.3 Multi-Resource Scenario Tests
+**Requirement ID:** AT-003
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Test complex scenarios involving multiple resources and their interactions.
+
+**Example Scenarios:**
+
+1. **Hub-and-Spoke Topology:**
+   - Create transit VPC
+   - Create transit gateway
+   - Create multiple spoke VPCs
+   - Create spoke gateways
+   - Attach spokes to transit
+   - Verify connectivity
+
+2. **FireNet Deployment:**
+   - Create FireNet VPC
+   - Create transit gateway with FireNet enabled
+   - Deploy firewall instances
+   - Configure firewall policies
+   - Attach spoke gateways
+   - Verify traffic flow through firewall
+
+3. **Multi-Cloud Transit:**
+   - Create transit gateways in AWS, Azure, GCP
+   - Peer transit gateways across clouds
+   - Attach spoke gateways in each cloud
+   - Verify cross-cloud connectivity
+
+4. **Site2Cloud VPN:**
+   - Create gateway
+   - Configure Site2Cloud connection
+   - Verify tunnel establishment
+   - Test failover scenarios
+
+**Coverage Target:** 25 common deployment scenarios
+
+**Implementation Effort:**
+- Estimated: 8-12 hours per scenario
+- Total: ~250 hours (25 scenarios × 10 hours)
+- Timeline: 6-8 weeks with 2-3 engineers
+
+---
+
+## 3.3 Integration Testing Framework
+
+### 3.3.1 Cloud Provider Integration Tests
+**Requirement ID:** IT-001
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Validate integration with each cloud provider's APIs and services.
+
+**Test Categories:**
+
+1. **AWS Integration:**
+   - VPC API integration
+   - EC2 instance management
+   - IAM role assumption
+   - Route table manipulation
+   - Security group management
+   - Transit Gateway integration
+   - GuardDuty integration
+
+2. **Azure Integration:**
+   - VNet API integration
+   - VM management
+   - Service principal authentication
+   - Route table management
+   - Network security groups
+   - VNet peering
+
+3. **GCP Integration:**
+   - VPC API integration
+   - Compute instance management
+   - Service account authentication
+   - Route management
+   - Firewall rules
+
+4. **OCI Integration:**
+   - VCN API integration
+   - Compute instance management
+   - API key authentication
+   - Route table management
+
+**Acceptance Criteria:**
+- [ ] Test API authentication for each provider
+- [ ] Test resource creation via provider APIs
+- [ ] Test resource updates via provider APIs
+- [ ] Test resource deletion via provider APIs
+- [ ] Test error handling for API failures
+- [ ] Test rate limiting and retry logic
+- [ ] Test regional API endpoints
+- [ ] Test API version compatibility
+
+**Coverage Target:** All provider API integration points
+
+**Implementation Effort:**
+- Estimated: 120 hours (30 hours per provider)
+- Timeline: 3-4 weeks with 3 engineers
+
+---
+
+### 3.3.2 Aviatrix Controller Integration Tests
+**Requirement ID:** IT-002
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Validate integration with Aviatrix Controller API across different controller versions.
+
+**Test Categories:**
+
+1. **Authentication Tests:**
+   - Login with username/password
+   - CID token management
+   - Session expiration handling
+   - Concurrent session handling
+
+2. **API Version Compatibility:**
+   - Test against minimum supported version
+   - Test against latest stable version
+   - Test against beta versions
+   - Test version upgrade scenarios
+
+3. **API Endpoint Tests:**
+   - Test all API endpoints used by provider
+   - Validate request/response formats
+   - Test pagination for list operations
+   - Test filtering and sorting
+
+4. **Error Handling:**
+   - API timeout scenarios
+   - Invalid request handling
+   - Controller unavailable scenarios
+   - Rate limiting
+
+**Controller Version Matrix:**
+```
+Provider Version | Controller Min | Controller Max | Status
+--------------- | -------------- | -------------- | ------
+v3.0.x          | 6.8            | 7.1            | Active
+v3.1.x          | 6.9            | 7.2            | Active
+v3.2.x          | 7.0            | 7.2            | Development
+```
+
+**Coverage Target:** All controller API endpoints
+
+**Implementation Effort:**
+- Estimated: 80 hours
+- Timeline: 2-3 weeks with 2 engineers
+
+---
+
+### 3.3.3 Terraform SDK Integration Tests
+**Requirement ID:** IT-003
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Validate integration with Terraform Plugin SDK v2 features and behaviors.
+
+**Test Categories:**
+
+1. **State Management:**
+   - State read/write operations
+   - State locking
+   - State migration
+   - State import
+   - Computed attributes
+
+2. **Plan/Apply Cycle:**
+   - Plan generation
+   - Apply execution
+   - Destroy operations
+   - Refresh operations
+
+3. **SDK Features:**
+   - Context handling
+   - Retry logic
+   - Timeouts
+   - Diagnostics
+   - Deprecated fields
+
+**Coverage Target:** All SDK integration points
+
+**Implementation Effort:**
+- Estimated: 60 hours
+- Timeline: 2 weeks with 2 engineers
+
+---
+
+## 3.4 Performance Testing Framework
+
+### 3.4.1 Resource Creation Performance Tests
+**Requirement ID:** PT-001
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Measure and validate performance of resource creation operations.
+
+**Test Scenarios:**
+
+1. **Single Resource Performance:**
+   - Gateway creation time (target: <5 minutes)
+   - Transit gateway creation time (target: <8 minutes)
+   - VPC creation time (target: <2 minutes)
+   - Peering creation time (target: <3 minutes)
+
+2. **Concurrent Resource Creation:**
+   - 10 gateways in parallel
+   - 5 transit gateways in parallel
+   - Mixed resource types in parallel
+
+3. **Large-Scale Deployment:**
+   - Hub-and-spoke with 50 spokes (target: <2 hours)
+   - Multi-region deployment (5 regions)
+   - Multi-cloud deployment (AWS + Azure + GCP)
+
+**Performance Benchmarks:**
+```go
+func BenchmarkGatewayCreate(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        // Create gateway
+        // Measure time
+        // Cleanup
+    }
+}
+```
+
+**Acceptance Criteria:**
+- [ ] Baseline performance metrics established
+- [ ] Performance regression detection
+- [ ] Resource creation time within SLA
+- [ ] Memory usage within limits
+- [ ] No resource leaks
+
+**Coverage Target:** All resource types
+
+**Implementation Effort:**
+- Estimated: 100 hours
+- Timeline: 2-3 weeks with 2 engineers
+
+---
+
+### 3.4.2 API Rate Limiting Tests
+**Requirement ID:** PT-002
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Test behavior under API rate limiting scenarios.
+
+**Test Scenarios:**
+- Trigger rate limits with rapid API calls
+- Verify retry logic kicks in
+- Validate exponential backoff
+- Test circuit breaker patterns
+- Monitor API quota usage
+
+**Coverage Target:** All API retry logic
+
+**Implementation Effort:**
+- Estimated: 40 hours
+- Timeline: 1 week with 2 engineers
+
+---
+
+### 3.4.3 Load Testing
+**Requirement ID:** PT-003
+**Priority:** P2 (Medium)
+**Status:** Nice-to-Have
+
+**Description:**
+Validate provider behavior under sustained heavy load.
+
+**Test Scenarios:**
+- Continuous resource creation for 24 hours
+- Sustained API call rate at 80% of limit
+- Memory leak detection over time
+- Connection pool exhaustion
+
+**Coverage Target:** Provider-level stress testing
+
+**Implementation Effort:**
+- Estimated: 60 hours
+- Timeline: 2 weeks with 2 engineers
+
+---
+
+## 3.5 Security and Compliance Testing
+
+### 3.5.1 Security Scanning
+**Requirement ID:** ST-001
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Automated security scanning of codebase and dependencies.
+
+**Tools and Tests:**
+
+1. **Static Analysis:**
+   - Gosec for security vulnerabilities
+   - Go vet for code correctness
+   - Staticcheck for code quality
+   - golangci-lint comprehensive checks
+
+2. **Dependency Scanning:**
+   - go mod audit for vulnerable dependencies
+   - Dependabot for automated updates
+   - License compliance checking
+
+3. **Secret Scanning:**
+   - Detect hardcoded credentials
+   - Detect API keys in code
+   - Validate environment variable usage
+
+**Acceptance Criteria:**
+- [ ] Zero high-severity security findings
+- [ ] All dependencies up to date
+- [ ] No hardcoded secrets
+- [ ] Security scan runs on every PR
+- [ ] SARIF reports generated
+
+**Coverage Target:** 100% of codebase
+
+**Implementation Effort:**
+- Estimated: 40 hours (setup + remediation)
+- Timeline: 1-2 weeks with 2 engineers
+
+---
+
+### 3.5.2 Compliance Testing
+**Requirement ID:** ST-002
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Validate compliance with security standards and best practices.
+
+**Compliance Checks:**
+
+1. **Terraform Best Practices:**
+   - State encryption validation
+   - Sensitive data handling
+   - Backend configuration
+   - Variable validation
+
+2. **Cloud Security Standards:**
+   - AWS Security Hub compliance
+   - Azure Security Center compliance
+   - GCP Security Command Center compliance
+   - CIS Benchmarks
+
+3. **Data Protection:**
+   - Credential encryption at rest
+   - Credential encryption in transit
+   - PII handling
+   - Audit logging
+
+**Coverage Target:** All compliance requirements
+
+**Implementation Effort:**
+- Estimated: 60 hours
+- Timeline: 2 weeks with 2 engineers
+
+---
+
+## 3.6 Reliability and Chaos Engineering
+
+### 3.6.1 Failure Injection Tests
+**Requirement ID:** RE-001
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Test provider behavior under failure conditions.
+
+**Failure Scenarios:**
+
+1. **Network Failures:**
+   - Controller unreachable
+   - Intermittent connectivity
+   - DNS resolution failures
+   - Timeout scenarios
+
+2. **API Failures:**
+   - 500 Internal Server Error
+   - 503 Service Unavailable
+   - 429 Rate Limit Exceeded
+   - Partial response failures
+
+3. **Resource Failures:**
+   - Cloud provider quota exceeded
+   - Resource already exists
+   - Resource not found
+   - Concurrent modification
+
+4. **State Failures:**
+   - State file corruption
+   - State lock contention
+   - Backend unavailable
+
+**Test Pattern:**
+```go
+func TestGatewayCreate_ControllerUnreachable(t *testing.T) {
+    // Simulate controller unreachable
+    // Attempt gateway creation
+    // Verify error handling
+    // Verify retry logic
+    // Verify no partial resources created
+}
+```
+
+**Acceptance Criteria:**
+- [ ] Graceful error handling for all failures
+- [ ] Retry logic validated
+- [ ] No resource leaks on failure
+- [ ] Clear error messages
+- [ ] State consistency maintained
+
+**Coverage Target:** 50+ failure scenarios
+
+**Implementation Effort:**
+- Estimated: 100 hours
+- Timeline: 3-4 weeks with 2 engineers
+
+---
+
+### 3.6.2 Recovery Testing
+**Requirement ID:** RE-002
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Test recovery from partial failures and interrupted operations.
+
+**Recovery Scenarios:**
+- Resume after controller restart
+- Resume after network recovery
+- Cleanup partial resources
+- State reconciliation
+
+**Coverage Target:** All critical operations
+
+**Implementation Effort:**
+- Estimated: 60 hours
+- Timeline: 2 weeks with 2 engineers
+
+---
+
+## 3.7 Regression Testing
+
+### 3.7.1 Automated Regression Suite
+**Requirement ID:** RG-001
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Maintain regression test suite to prevent previously fixed bugs from reoccurring.
+
+**Components:**
+
+1. **Bug Reproduction Tests:**
+   - Test for every fixed bug
+   - Test issue number referenced
+   - Test prevented regression
+
+2. **Version Compatibility Tests:**
+   - Test upgrades from previous versions
+   - Test state migration
+   - Test deprecated field handling
+
+3. **Backward Compatibility Tests:**
+   - Test old configurations still work
+   - Test provider version upgrades
+   - Test controller version compatibility
+
+**Test Organization:**
+```
+aviatrix/
+├── regression_tests/
+│   ├── issue_1234_test.go
+│   ├── issue_1235_test.go
+│   └── ...
+└── version_compat_tests/
+    ├── v2_to_v3_test.go
+    └── ...
+```
+
+**Acceptance Criteria:**
+- [ ] Test for every resolved GitHub issue
+- [ ] Regression suite runs on every PR
+- [ ] Version upgrade paths tested
+- [ ] Deprecated feature warnings tested
+
+**Coverage Target:** 100% of fixed bugs
+
+**Implementation Effort:**
+- Ongoing: 2-4 hours per bug fix
+- Initial backfill: 120 hours
+- Timeline: Ongoing maintenance
+
+---
+
+## 3.8 Documentation and Example Testing
+
+### 3.8.1 Example Validation
+**Requirement ID:** DT-001
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Validate all documentation examples are working and up-to-date.
+
+**Test Scope:**
+- All README examples
+- All resource documentation examples
+- All data source documentation examples
+- Tutorial examples
+- Blog post examples
+
+**Validation Method:**
+```bash
+# Automated example testing
+terraform init
+terraform validate
+terraform plan
+terraform apply -auto-approve
+terraform destroy -auto-approve
+```
+
+**Acceptance Criteria:**
+- [ ] All examples pass `terraform validate`
+- [ ] All examples can be applied successfully
+- [ ] Examples are tested on every release
+- [ ] Broken examples trigger CI failure
+
+**Coverage Target:** 100% of published examples
+
+**Implementation Effort:**
+- Estimated: 80 hours
+- Timeline: 2-3 weeks with 2 engineers
+
+---
+
+### 3.8.2 Schema Documentation Validation
+**Requirement ID:** DT-002
+**Priority:** P2 (Medium)
+**Status:** Nice-to-Have
+
+**Description:**
+Ensure documentation matches actual resource schemas.
+
+**Validation:**
+- Required fields documented
+- Optional fields documented
+- Computed fields documented
+- Field types match
+- Default values documented
+
+**Coverage Target:** 100% of resource/data source fields
+
+**Implementation Effort:**
+- Estimated: 40 hours
+- Timeline: 1 week with 1 engineer
+
+---
+
+## 3.9 Test Infrastructure Enhancements
+
+### 3.9.1 Test Data Management
+**Requirement ID:** TI-001
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Implement test data generation and management system.
+
+**Components:**
+
+1. **Test Data Factories:**
+```go
+func NewTestGateway(opts ...GatewayOption) *Gateway {
+    gw := &Gateway{
+        Name:      fmt.Sprintf("test-gw-%s", randomString()),
+        CloudType: 1,
+        Size:      "t3.medium",
+        // ... sensible defaults
+    }
+    for _, opt := range opts {
+        opt(gw)
+    }
+    return gw
+}
+```
+
+2. **Fixture Management:**
+   - Reusable test configurations
+   - Terraform configuration templates
+   - Mock API responses
+
+3. **Test Environment Isolation:**
+   - Unique resource naming per test
+   - Dedicated test accounts
+   - Automatic cleanup
+
+**Acceptance Criteria:**
+- [ ] Factories for all resource types
+- [ ] Fixture library for common scenarios
+- [ ] No test cross-contamination
+- [ ] Deterministic test data
+
+**Coverage Target:** All resource types
+
+**Implementation Effort:**
+- Estimated: 80 hours
+- Timeline: 2-3 weeks with 2 engineers
+
+---
+
+### 3.9.2 Mock Controller for Unit Tests
+**Requirement ID:** TI-002
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Implement mock Aviatrix controller for fast unit testing without real infrastructure.
+
+**Features:**
+- HTTP server mocking controller API
+- Configurable responses
+- Request validation
+- State simulation
+- Error injection
+
+**Example Usage:**
+```go
+func TestGatewayCreate_Unit(t *testing.T) {
+    mockController := NewMockController()
+    mockController.On("CreateGateway").Return(mockGateway, nil)
+
+    client := NewClient(mockController.URL())
+    // Test gateway creation
+}
+```
+
+**Acceptance Criteria:**
+- [ ] All controller endpoints mocked
+- [ ] Fast execution (<100ms per test)
+- [ ] No external dependencies
+- [ ] Realistic response simulation
+
+**Coverage Target:** All API endpoints
+
+**Implementation Effort:**
+- Estimated: 120 hours
+- Timeline: 3-4 weeks with 2 engineers
+
+---
+
+### 3.9.3 Test Parallelization
+**Requirement ID:** TI-003
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Optimize test execution through intelligent parallelization.
+
+**Strategies:**
+
+1. **Unit Test Parallelization:**
+   - Run all unit tests in parallel
+   - No shared state between tests
+   - Target: 10x speedup
+
+2. **Acceptance Test Parallelization:**
+   - Parallel execution within cloud provider
+   - Resource isolation per test
+   - Target: 5x speedup
+
+3. **CI/CD Optimization:**
+   - Split tests across multiple runners
+   - Cache Go modules
+   - Cache Terraform plugins
+   - Conditional test execution (changed files only)
+
+**Acceptance Criteria:**
+- [ ] Unit tests run in <2 minutes
+- [ ] Full acceptance suite runs in <30 minutes
+- [ ] No test flakiness from parallelization
+- [ ] Efficient resource utilization
+
+**Coverage Target:** All test suites
+
+**Implementation Effort:**
+- Estimated: 60 hours
+- Timeline: 2 weeks with 2 engineers
+
+---
+
+### 3.9.4 Test Reporting and Analytics
+**Requirement ID:** TI-004
+**Priority:** P2 (Medium)
+**Status:** Nice-to-Have
+
+**Description:**
+Implement comprehensive test reporting and analytics.
+
+**Features:**
+
+1. **Test Dashboards:**
+   - Coverage trends over time
+   - Test execution time trends
+   - Flaky test detection
+   - Failure rate by resource type
+
+2. **Cost Analytics:**
+   - Cloud resource costs per test run
+   - Cost optimization recommendations
+   - Budget alerts
+
+3. **Performance Metrics:**
+   - Test execution time heatmap
+   - Resource creation time percentiles
+   - API call latency distribution
+
+4. **Quality Metrics:**
+   - Bug escape rate
+   - Mean time to detect
+   - Test coverage by cloud provider
+
+**Tools:**
+- Grafana for dashboards
+- Prometheus for metrics
+- TestRail for test management
+- Custom reporting scripts
+
+**Acceptance Criteria:**
+- [ ] Real-time test dashboard
+- [ ] Historical trend analysis
+- [ ] Automated quality gates
+- [ ] Cost tracking per test run
+
+**Coverage Target:** All test types
+
+**Implementation Effort:**
+- Estimated: 100 hours
+- Timeline: 3-4 weeks with 2 engineers
+
+---
+
+## 3.10 Continuous Testing
+
+### 3.10.1 Pre-Commit Hooks
+**Requirement ID:** CT-001
+**Priority:** P1 (High)
+**Status:** Required
+
+**Description:**
+Implement pre-commit hooks for fast feedback.
+
+**Hooks:**
+```bash
+# .git/hooks/pre-commit
+#!/bin/bash
+make fmt
+make vet
+make lint
+go test -short ./...
+```
+
+**Checks:**
+- Code formatting (gofmt)
+- Linting (golangci-lint)
+- Fast unit tests (short mode)
+- Security scanning
+- License header validation
+
+**Acceptance Criteria:**
+- [ ] Hooks run in <30 seconds
+- [ ] Catch common issues early
+- [ ] Easy to bypass if needed
+- [ ] Documented in CONTRIBUTING.md
+
+**Implementation Effort:**
+- Estimated: 20 hours
+- Timeline: 3-5 days with 1 engineer
+
+---
+
+### 3.10.2 Pull Request Validation
+**Requirement ID:** CT-002
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Automated validation of pull requests before merge.
+
+**Validation Gates:**
+
+1. **Required Checks:**
+   - All unit tests pass
+   - All changed resources have tests
+   - Code coverage doesn't decrease
+   - No security vulnerabilities
+   - Documentation updated
+
+2. **Optional Checks:**
+   - Acceptance tests for changed resources
+   - Performance benchmarks
+   - Integration tests
+
+3. **Automated Actions:**
+   - Comment with test results
+   - Comment with coverage report
+   - Label based on test status
+   - Block merge on failures
+
+**GitHub Actions Workflow:**
+```yaml
+name: PR Validation
+on: pull_request
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Run tests
+        run: make test
+      - name: Coverage report
+        run: make coverage
+      - name: Security scan
+        run: make security-scan
+```
+
+**Acceptance Criteria:**
+- [ ] All PRs automatically validated
+- [ ] Fast feedback (<15 minutes)
+- [ ] Clear pass/fail criteria
+- [ ] Actionable failure messages
+
+**Coverage Target:** 100% of PRs
+
+**Implementation Effort:**
+- Estimated: 40 hours
+- Timeline: 1 week with 1 engineer
+
+---
+
+### 3.10.3 Nightly Test Runs
+**Requirement ID:** CT-003
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Comprehensive nightly test runs against all cloud providers.
+
+**Test Scope:**
+- Full unit test suite
+- Full acceptance test suite
+- Integration tests
+- Performance tests
+- Long-running tests (>1 hour)
+
+**Schedule:**
+```
+Daily at 2 AM UTC:
+  - Full test suite on main branch
+  - Test matrix: All cloud providers
+  - Generate coverage report
+  - Generate performance report
+  - Send notifications on failure
+```
+
+**Acceptance Criteria:**
+- [ ] Tests run every night
+- [ ] Results published to dashboard
+- [ ] Failures trigger alerts
+- [ ] Flaky tests identified
+- [ ] Test artifacts retained
+
+**Coverage Target:** 100% of test suite
+
+**Implementation Effort:**
+- Estimated: 40 hours
+- Timeline: 1 week with 1 engineer
+
+---
+
+### 3.10.4 Release Testing
+**Requirement ID:** CT-004
+**Priority:** P0 (Critical)
+**Status:** Required
+
+**Description:**
+Comprehensive testing before every release.
+
+**Release Checklist:**
+
+1. **Pre-Release Tests:**
+   - [ ] All unit tests pass
+   - [ ] All acceptance tests pass
+   - [ ] Integration tests pass
+   - [ ] Performance benchmarks meet SLA
+   - [ ] Security scan clean
+   - [ ] Documentation up-to-date
+   - [ ] CHANGELOG updated
+
+2. **Release Candidate Testing:**
+   - [ ] Upgrade path from previous version
+   - [ ] Backward compatibility verified
+   - [ ] Example validation
+   - [ ] Manual smoke testing
+
+3. **Post-Release Validation:**
+   - [ ] Provider published to Terraform Registry
+   - [ ] Examples work with released version
+   - [ ] Release notes published
+   - [ ] GitHub release created
+
+**Acceptance Criteria:**
+- [ ] No release without passing tests
+- [ ] Automated release checklist
+- [ ] Release notes auto-generated
+- [ ] Rollback plan documented
+
+**Coverage Target:** 100% of releases
+
+**Implementation Effort:**
+- Estimated: 60 hours
+- Timeline: 2 weeks with 2 engineers
+
+---
+
+## 4. Technical Implementation Details
+
+### 4.1 Test Organization
+
+**Directory Structure:**
+```
+terraform-provider-aviatrix/
+├── aviatrix/
+│   ├── resource_aviatrix_gateway.go
+│   ├── resource_aviatrix_gateway_test.go         # Acceptance tests
+│   ├── resource_aviatrix_gateway_unit_test.go   # Unit tests
+│   ├── data_source_aviatrix_gateway.go
+│   ├── data_source_aviatrix_gateway_test.go
+│   ├── provider.go
+│   ├── provider_test.go
+│   ├── test_helpers_test.go                      # Test utilities
+│   ├── test_logger_test.go                       # Logging helpers
+│   ├── smoke_test.go                              # Smoke tests
+│   └── ...
+├── test-fixtures/                                 # Reusable configs
+│   ├── gateway/
+│   │   ├── basic.tf
+│   │   ├── ha.tf
+│   │   └── ...
+│   └── transit/
+│       └── ...
+├── test-data/                                     # Test data
+│   ├── mock-responses/
+│   └── fixtures/
+├── mock-controller/                               # Mock server
+│   ├── server.go
+│   ├── handlers.go
+│   └── responses.go
+└── scripts/
+    ├── test-env-setup.sh
+    ├── test-runner.sh
+    ├── cleanup-resources.sh
+    └── cost-report.sh
+```
+
+### 4.2 Test Naming Conventions
+
+**Unit Tests:**
+```go
+func TestResourceAviatrixGateway_Create(t *testing.T)
+func TestResourceAviatrixGateway_Read(t *testing.T)
+func TestResourceAviatrixGateway_Update(t *testing.T)
+func TestResourceAviatrixGateway_Delete(t *testing.T)
+func TestResourceAviatrixGateway_ImportState(t *testing.T)
+```
+
+**Acceptance Tests:**
+```go
+func TestAccAviatrixGateway_basic(t *testing.T)
+func TestAccAviatrixGateway_ha(t *testing.T)
+func TestAccAviatrixGateway_vpn(t *testing.T)
+func TestAccAviatrixGateway_update(t *testing.T)
+func TestAccAviatrixGateway_import(t *testing.T)
+```
+
+**Integration Tests:**
+```go
+func TestIntegration_AWS_GatewayCreate(t *testing.T)
+func TestIntegration_Azure_GatewayCreate(t *testing.T)
+func TestIntegration_MultiCloud_Peering(t *testing.T)
+```
+
+### 4.3 Test Helpers and Utilities
+
+**Resource Factory Pattern:**
+```go
+type GatewayConfig struct {
+    Name      string
+    CloudType int
+    Size      string
+    VPCId     string
+    Subnet    string
+    // ... more fields
+}
+
+func NewGatewayConfig(opts ...func(*GatewayConfig)) *GatewayConfig {
+    cfg := &GatewayConfig{
+        Name:      fmt.Sprintf("test-gw-%s", randomString()),
+        CloudType: 1,
+        Size:      "t3.medium",
+        // ... defaults
+    }
+    for _, opt := range opts {
+        opt(cfg)
+    }
+    return cfg
+}
+
+// Usage:
+cfg := NewGatewayConfig(
+    WithCloudType(8), // Azure
+    WithSize("Standard_B2s"),
+)
+```
+
+**Test Case Builder:**
+```go
+type TestCaseBuilder struct {
+    name       string
+    preCheck   func(*testing.T)
+    steps      []resource.TestStep
+    providers  map[string]*schema.Provider
+}
+
+func NewTestCase(name string) *TestCaseBuilder {
+    return &TestCaseBuilder{
+        name:      name,
+        providers: testAccProviders,
+    }
+}
+
+func (b *TestCaseBuilder) WithPreCheck(f func(*testing.T)) *TestCaseBuilder {
+    b.preCheck = f
+    return b
+}
+
+func (b *TestCaseBuilder) WithStep(step resource.TestStep) *TestCaseBuilder {
+    b.steps = append(b.steps, step)
+    return b
+}
+
+func (b *TestCaseBuilder) Run(t *testing.T) {
+    resource.Test(t, resource.TestCase{
+        PreCheck:  b.preCheck,
+        Providers: b.providers,
+        Steps:     b.steps,
+    })
+}
+
+// Usage:
+NewTestCase("gateway_basic").
+    WithPreCheck(testAccPreCheck).
+    WithStep(resource.TestStep{
+        Config: testAccGatewayBasic(),
+        Check:  testAccCheckGatewayExists("aviatrix_gateway.test"),
+    }).
+    Run(t)
+```
+
+### 4.4 Mock Controller Implementation
+
+**Mock Server:**
+```go
+type MockController struct {
+    server   *httptest.Server
+    state    map[string]interface{} // Resource state
+    handlers map[string]http.HandlerFunc
+}
+
+func NewMockController() *MockController {
+    mc := &MockController{
+        state:    make(map[string]interface{}),
+        handlers: make(map[string]http.HandlerFunc),
+    }
+
+    mc.RegisterHandler("POST", "/v1/api", mc.handleLogin)
+    mc.RegisterHandler("GET", "/v1/api", mc.handleGet)
+    mc.RegisterHandler("POST", "/v1/api?action=create_gateway", mc.handleCreateGateway)
+    // ... more handlers
+
+    mc.server = httptest.NewServer(mc.router())
+    return mc
+}
+
+func (mc *MockController) handleCreateGateway(w http.ResponseWriter, r *http.Request) {
+    // Parse request
+    // Validate inputs
+    // Store in state
+    // Return response
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "return": true,
+        "results": map[string]interface{}{
+            "gateway_name": "test-gw",
+        },
+    })
+}
+```
+
+### 4.5 Test Data Isolation
+
+**Unique Resource Naming:**
+```go
+func uniqueName(prefix string) string {
+    return fmt.Sprintf("%s-%s-%d",
+        prefix,
+        os.Getenv("CI_RUN_ID"),
+        time.Now().Unix(),
+    )
+}
+
+// Usage:
+gatewayName := uniqueName("test-gw")
+```
+
+**Dedicated Test Accounts:**
+```yaml
+AWS_TEST_ACCOUNT_ID: "123456789012"
+AZURE_TEST_SUBSCRIPTION: "test-subscription-id"
+GCP_TEST_PROJECT: "test-project-id"
+OCI_TEST_COMPARTMENT: "test-compartment-id"
+```
+
+**Resource Tagging:**
+```go
+tags := map[string]string{
+    "Environment": "test",
+    "ManagedBy":   "terraform-test",
+    "TestRun":     os.Getenv("CI_RUN_ID"),
+    "Owner":       "ci-bot",
+}
+```
+
+### 4.6 Cleanup and Resource Management
+
+**Automatic Cleanup:**
+```go
+func TestAccGateway_basic(t *testing.T) {
+    t.Cleanup(func() {
+        // Cleanup code runs even if test fails
+        cleanupDanglingResources(t)
+    })
+
+    // Test code
+}
+```
+
+**Dangling Resource Detection:**
+```bash
+#!/bin/bash
+# scripts/cleanup-dangling-resources.sh
+
+# Find resources older than 24 hours with test tags
+aws ec2 describe-instances \
+    --filters "Name=tag:Environment,Values=test" \
+              "Name=instance-state-name,Values=running" \
+    --query 'Reservations[].Instances[?LaunchTime<=`'$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S)'`].[InstanceId]' \
+    --output text | \
+xargs -r aws ec2 terminate-instances --instance-ids
+```
+
+---
+
+## 5. Test Execution Strategy
+
+### 5.1 Local Development Testing
+
+**Developer Workflow:**
+```bash
+# Quick feedback loop
+make test-unit              # Fast unit tests (<2 min)
+make test-changed           # Tests for changed files only
+
+# Before committing
+make test                   # All unit tests
+make lint                   # Linting
+make fmt                    # Code formatting
+
+# Before creating PR
+make test-acceptance RESOURCE=gateway  # Specific resource
+make test-integration PROVIDER=aws     # Specific provider
+
+# Full validation (rare)
+make test-all               # Everything (30+ minutes)
+```
+
+**Makefile Targets:**
+```makefile
+.PHONY: test-unit
+test-unit:
+	TF_ACC=0 go test -v -short -race -timeout=10m ./aviatrix/...
+
+.PHONY: test-acceptance
+test-acceptance:
+	TF_ACC=1 go test -v -run="TestAcc" -timeout=2h ./aviatrix/...
+
+.PHONY: test-integration
+test-integration:
+	./scripts/test-runner.sh --type=integration --provider=$(PROVIDER)
+
+.PHONY: test-changed
+test-changed:
+	git diff --name-only origin/main | grep '_test.go$$' | xargs go test -v
+```
+
+### 5.2 CI/CD Test Execution
+
+**Pull Request Tests (Fast Feedback):**
+- Unit tests for all packages
+- Acceptance tests for changed resources only
+- Linting and security scanning
+- Target: <15 minutes
+
+**Main Branch Tests (Comprehensive):**
+- Full unit test suite
+- Full acceptance test suite (subset per cloud)
+- Integration tests
+- Performance benchmarks
+- Target: <45 minutes
+
+**Nightly Tests (Complete):**
+- Full unit test suite
+- Full acceptance test suite (all clouds)
+- Integration tests (all providers)
+- Performance tests
+- Long-running tests
+- Security compliance tests
+- Target: <4 hours
+
+**Release Tests (Thorough):**
+- Everything in nightly
+- Upgrade path testing
+- Backward compatibility testing
+- Example validation
+- Manual smoke testing
+- Target: <6 hours
+
+### 5.3 Test Prioritization
+
+**Priority Levels:**
+
+1. **P0 - Critical (Must Pass):**
+   - Unit tests
+   - Smoke tests
+   - Security scans
+   - Core resource acceptance tests
+
+2. **P1 - High (Should Pass):**
+   - Full acceptance test suite
+   - Integration tests
+   - Performance tests
+
+3. **P2 - Medium (Nice to Have):**
+   - Chaos tests
+   - Load tests
+   - Example validation
+
+**Test Selection Algorithm:**
+```python
+def select_tests(context):
+    if context == "pre-commit":
+        return ["unit-fast", "lint"]
+    elif context == "pr":
+        return ["unit-all", "acceptance-changed", "security"]
+    elif context == "main":
+        return ["unit-all", "acceptance-core", "integration"]
+    elif context == "nightly":
+        return ["unit-all", "acceptance-all", "integration-all", "performance"]
+    elif context == "release":
+        return ["all"]
+```
+
+---
+
+## 6. Quality Gates and Metrics
+
+### 6.1 Coverage Requirements
+
+**Code Coverage Thresholds:**
+```yaml
+coverage:
+  global:
+    minimum: 80%
+    target: 95%
+
+  per-file:
+    minimum: 70%
+    target: 90%
+
+  per-package:
+    minimum: 80%
+    target: 95%
+```
+
+**Coverage Enforcement:**
+- PRs cannot merge if coverage decreases
+- New code must have ≥90% coverage
+- Exemptions require justification
+
+### 6.2 Performance SLAs
+
+**Resource Creation Times:**
+```yaml
+sla:
+  gateway:
+    max: 300s      # 5 minutes
+    p95: 240s      # 4 minutes
+    p50: 180s      # 3 minutes
+
+  transit_gateway:
+    max: 480s      # 8 minutes
+    p95: 420s      # 7 minutes
+    p50: 360s      # 6 minutes
+
+  vpc:
+    max: 120s      # 2 minutes
+    p95: 90s
+    p50: 60s
+```
+
+**Test Execution Times:**
+```yaml
+execution:
+  unit_tests:
+    max: 120s      # 2 minutes
+    target: 60s    # 1 minute
+
+  pr_validation:
+    max: 900s      # 15 minutes
+    target: 600s   # 10 minutes
+
+  full_suite:
+    max: 1800s     # 30 minutes
+    target: 1200s  # 20 minutes
+```
+
+### 6.3 Quality Metrics
+
+**Test Health Metrics:**
+```yaml
+metrics:
+  flakiness:
+    threshold: 1%
+    alert: 5%
+
+  failure_rate:
+    threshold: 0.5%
+    alert: 2%
+
+  bug_escape_rate:
+    threshold: 0.1%
+    alert: 0.5%
+
+  mean_time_to_detect:
+    threshold: 1h
+    alert: 4h
+```
+
+**Automated Quality Gates:**
+- Block PR merge if coverage decreases
+- Block PR merge on security vulnerabilities
+- Block PR merge on failing tests
+- Block release on failing nightly tests
+- Alert on flaky tests
+- Alert on slow tests
+
+---
+
+## 7. Documentation Requirements
+
+### 7.1 Test Documentation
+
+**Required Documentation:**
+
+1. **Test README:**
+   - How to run tests locally
+   - Test organization structure
+   - Test naming conventions
+   - How to write new tests
+   - Troubleshooting guide
+
+2. **Per-Test Documentation:**
+   - Purpose of test
+   - What scenarios it covers
+   - Prerequisites
+   - Expected behavior
+
+3. **Test Data Documentation:**
+   - Test fixture descriptions
+   - Mock response documentation
+   - Test account setup
+
+**Example:**
+```go
+// TestAccAviatrixGateway_basic validates basic gateway creation in AWS.
+//
+// This test covers:
+//   - Gateway creation with minimal configuration
+//   - State persistence and refresh
+//   - Gateway deletion and cleanup
+//
+// Prerequisites:
+//   - AWS account configured
+//   - Valid Aviatrix controller
+//   - Test VPC in us-east-1
+//
+// Expected behavior:
+//   - Gateway created in ~3 minutes
+//   - All attributes persisted to state
+//   - Clean deletion on destroy
+func TestAccAviatrixGateway_basic(t *testing.T) {
+    // ...
+}
+```
+
+### 7.2 Contributing Guide
+
+**Testing Section in CONTRIBUTING.md:**
+```markdown
+## Testing
+
+### Running Tests
+
+#### Unit Tests
+```bash
+make test-unit
+```
+
+#### Acceptance Tests
+```bash
+# Set up test environment
+cp .env.test.example .env.test
+# Edit .env.test with your credentials
+source .env.test
+
+# Run all acceptance tests
+make test-acceptance
+
+# Run tests for specific resource
+make test-acceptance RESOURCE=gateway
+```
+
+#### Integration Tests
+```bash
+make test-integration PROVIDER=aws
+```
+
+### Writing Tests
+
+1. **Unit Tests:** Test business logic without external dependencies
+2. **Acceptance Tests:** Test full resource lifecycle with real infrastructure
+3. **Integration Tests:** Test interactions between components
+
+See [TESTING.md](TESTING.md) for detailed guide.
+```
+
+### 7.3 Test Troubleshooting Guide
+
+**Common Issues and Solutions:**
+```markdown
+## Troubleshooting Tests
+
+### Test Timeout
+**Symptom:** Test times out after 30 minutes
+**Solution:**
+- Check controller connectivity
+- Verify cloud provider quotas
+- Check for stuck resources
+
+### Resource Already Exists
+**Symptom:** Test fails with "resource already exists"
+**Solution:**
+- Run cleanup script: `./scripts/cleanup-resources.sh`
+- Use unique resource names
+- Check test isolation
+
+### Flaky Tests
+**Symptom:** Test passes sometimes, fails other times
+**Solution:**
+- Add retry logic for eventually consistent operations
+- Add explicit waits for asynchronous operations
+- Check for test interdependencies
+```
+
+---
+
+## 8. Timeline and Milestones
+
+### 8.1 Implementation Phases
+
+**Phase 1: Foundation (Weeks 1-4) - COMPLETE ✅**
+- ✅ Docker infrastructure
+- ✅ CI/CD pipeline
+- ✅ Test helpers and utilities
+- ✅ Smoke tests
+- ✅ Documentation
+
+**Phase 2: Unit Testing (Weeks 5-20)**
+- Week 5-8: Provider and client unit tests
+- Week 9-16: Resource unit tests (40 resources)
+- Week 17-20: Resource unit tests (93 resources)
+- Deliverable: 100% unit test coverage
+
+**Phase 3: Acceptance Testing (Weeks 21-40)**
+- Week 21-24: Setup and tooling
+- Week 25-32: Core resource acceptance tests (50 resources)
+- Week 33-40: Remaining resource acceptance tests (83 resources)
+- Deliverable: 100% acceptance test coverage
+
+**Phase 4: Integration Testing (Weeks 41-48)**
+- Week 41-44: Cloud provider integration tests
+- Week 45-46: Controller integration tests
+- Week 47-48: Multi-resource scenario tests
+- Deliverable: Complete integration test suite
+
+**Phase 5: Advanced Testing (Weeks 49-56)**
+- Week 49-50: Performance testing
+- Week 51-52: Security and compliance testing
+- Week 53-54: Chaos engineering tests
+- Week 55-56: Documentation validation
+- Deliverable: Advanced test coverage
+
+**Phase 6: Optimization (Weeks 57-60)**
+- Week 57: Test parallelization optimization
+- Week 58: CI/CD optimization
+- Week 59: Test reporting and analytics
+- Week 60: Final cleanup and documentation
+- Deliverable: Optimized test infrastructure
+
+### 8.2 Milestones
+
+**M1: Foundation Complete (Week 4) - COMPLETE ✅**
+- All infrastructure in place
+- Smoke tests passing
+- Documentation complete
+
+**M2: Unit Testing 50% (Week 12)**
+- 67 resources with unit tests
+- Coverage >80%
+
+**M3: Unit Testing Complete (Week 20)**
+- 133 resources with unit tests
+- Coverage >95%
+
+**M4: Acceptance Testing 50% (Week 32)**
+- 67 resources with acceptance tests
+- All critical resources covered
+
+**M5: Acceptance Testing Complete (Week 40)**
+- 133 resources with acceptance tests
+- All clouds validated
+
+**M6: Integration Testing Complete (Week 48)**
+- All integration tests passing
+- Scenario tests complete
+
+**M7: Advanced Testing Complete (Week 56)**
+- Performance benchmarks established
+- Security tests passing
+- Chaos tests implemented
+
+**M8: Final Release (Week 60)**
+- 100% test coverage achieved
+- All quality gates passing
+- Documentation complete
+
+### 8.3 Resource Allocation
+
+**Team Composition:**
+- 4 Senior Engineers (full-time)
+- 2 QA Engineers (full-time)
+- 1 DevOps Engineer (50%)
+- 1 Technical Writer (25%)
+
+**Effort Estimate:**
+- Total: ~2,500 engineering hours
+- Duration: 60 weeks (14 months)
+- Cost: $500K - $750K (depending on rates)
+
+---
+
+## 9. Risk Management
+
+### 9.1 Technical Risks
+
+**Risk 1: Cloud Provider API Changes**
+- **Likelihood:** Medium
+- **Impact:** High
+- **Mitigation:**
+  - Version compatibility tests
+  - Automated dependency updates
+  - Monitoring for API deprecations
+
+**Risk 2: Test Flakiness**
+- **Likelihood:** High
+- **Impact:** Medium
+- **Mitigation:**
+  - Retry logic for eventually consistent operations
+  - Explicit waits and timeouts
+  - Flaky test detection and quarantine
+
+**Risk 3: Test Execution Time**
+- **Likelihood:** High
+- **Impact:** Medium
+- **Mitigation:**
+  - Aggressive parallelization
+  - Conditional test execution
+  - Fast feedback loops
+
+**Risk 4: Test Infrastructure Costs**
+- **Likelihood:** Medium
+- **Impact:** Medium
+- **Mitigation:**
+  - Resource cleanup automation
+  - Cost monitoring and alerts
+  - Efficient resource allocation
+
+**Risk 5: Controller Version Compatibility**
+- **Likelihood:** Medium
+- **Impact:** High
+- **Mitigation:**
+  - Test against multiple controller versions
+  - Version compatibility matrix
+  - Deprecation warnings
+
+### 9.2 Resource Risks
+
+**Risk 1: Engineer Availability**
+- **Likelihood:** Medium
+- **Impact:** High
+- **Mitigation:**
+  - Knowledge sharing and documentation
+  - Pair programming
+  - Cross-training
+
+**Risk 2: Cloud Account Access**
+- **Likelihood:** Low
+- **Impact:** High
+- **Mitigation:**
+  - Multiple test accounts
+  - Backup credentials
+  - Service principal rotation
+
+### 9.3 Schedule Risks
+
+**Risk 1: Scope Creep**
+- **Likelihood:** High
+- **Impact:** High
+- **Mitigation:**
+  - Strict prioritization (P0, P1, P2)
+  - Regular scope reviews
+  - Stakeholder alignment
+
+**Risk 2: Dependencies on External Teams**
+- **Likelihood:** Medium
+- **Impact:** Medium
+- **Mitigation:**
+  - Early identification of dependencies
+  - Parallel work streams
+  - Fallback plans
+
+---
+
+## 10. Success Metrics and KPIs
+
+### 10.1 Coverage Metrics
+
+**Code Coverage:**
+- Target: 95% line coverage
+- Minimum: 80% per file
+- Measurement: Weekly via CI/CD
+
+**Test Coverage:**
+- Resources: 133/133 (100%)
+- Data Sources: 23/23 (100%)
+- Cloud Providers: 4/4 (100%)
+- Measurement: Per release
+
+**Scenario Coverage:**
+- Common workflows: 95%
+- Edge cases: 80%
+- Error paths: 90%
+- Measurement: Quarterly review
+
+### 10.2 Quality Metrics
+
+**Bug Metrics:**
+- Production bug escape rate: <0.1%
+- Bugs found in testing: Trending up
+- Mean time to detect: <1 hour
+- Mean time to repair: <4 hours
+
+**Test Health:**
+- Test pass rate: >99%
+- Flaky test rate: <1%
+- False positive rate: <5%
+- Test execution time: <30 minutes
+
+### 10.3 Performance Metrics
+
+**Resource Creation:**
+- Gateway creation: <5 minutes (p95)
+- Transit gateway: <8 minutes (p95)
+- VPC creation: <2 minutes (p95)
+
+**Test Execution:**
+- Unit tests: <2 minutes
+- PR validation: <15 minutes
+- Full suite: <30 minutes
+
+### 10.4 Process Metrics
+
+**Development Velocity:**
+- PR merge time: <24 hours
+- Test write time: <4 hours per resource
+- Bug fix time: <48 hours
+
+**Cost Efficiency:**
+- Test infrastructure cost: <$5K/month
+- Cost per test run: <$50
+- Resource utilization: >80%
+
+### 10.5 Reporting
+
+**Weekly Reports:**
+- Test pass/fail rates
+- Coverage trends
+- Flaky test summary
+- Blockers and issues
+
+**Monthly Reports:**
+- Quality metrics dashboard
+- Performance trends
+- Cost analysis
+- Risk assessment
+
+**Quarterly Reports:**
+- Strategic progress review
+- Resource allocation review
+- Timeline adjustments
+- Success criteria validation
+
+---
+
+## 11. Dependencies and Prerequisites
+
+### 11.1 External Dependencies
+
+**Cloud Providers:**
+- AWS test account with appropriate quotas
+- Azure test subscription
+- GCP test project
+- OCI test tenancy
+
+**Aviatrix:**
+- Aviatrix Controller instance
+- Controller admin credentials
+- Cloud account access grants
+
+**Tools:**
+- Terraform 1.6+
+- Go 1.23+
+- Docker 20.10+
+- GitHub Actions
+
+### 11.2 Internal Dependencies
+
+**Code:**
+- Provider infrastructure code stable
+- Resource implementations complete
+- API client library stable
+
+**Infrastructure:**
+- CI/CD pipeline operational
+- Test environments provisioned
+- Monitoring and logging configured
+
+**Documentation:**
+- Resource documentation complete
+- API documentation available
+- Contributing guidelines published
+
+---
+
+## 12. Acceptance Criteria
+
+### 12.1 Phase Completion Criteria
+
+**Unit Testing Complete:**
+- [ ] 133/133 resources have unit tests
+- [ ] 23/23 data sources have unit tests
+- [ ] Code coverage >95%
+- [ ] All unit tests passing
+- [ ] Unit tests run in <2 minutes
+
+**Acceptance Testing Complete:**
+- [ ] 133/133 resources have acceptance tests
+- [ ] Tests cover all cloud providers
+- [ ] Tests cover basic + advanced scenarios
+- [ ] All acceptance tests passing
+- [ ] Test infrastructure cost <$5K/month
+
+**Integration Testing Complete:**
+- [ ] All cloud provider integrations tested
+- [ ] Controller API integration tested
+- [ ] Multi-resource scenarios tested
+- [ ] All integration tests passing
+
+**Advanced Testing Complete:**
+- [ ] Performance benchmarks established
+- [ ] Security scans passing
+- [ ] Chaos tests implemented
+- [ ] Documentation validated
+
+**Overall Project Complete:**
+- [ ] 100% test coverage achieved
+- [ ] All quality gates passing
+- [ ] Documentation complete
+- [ ] Training materials available
+- [ ] Handoff to maintenance team
+
+### 12.2 Release Criteria
+
+**Pre-Release:**
+- [ ] All P0 and P1 tests passing
+- [ ] Code coverage >95%
+- [ ] Security scan clean
+- [ ] Performance benchmarks met
+- [ ] Documentation up-to-date
+
+**Release:**
+- [ ] Version tagged
+- [ ] Release notes published
+- [ ] Provider published to registry
+- [ ] Examples validated
+- [ ] Announcement sent
+
+**Post-Release:**
+- [ ] Monitoring alerts configured
+- [ ] Support team notified
+- [ ] User feedback collected
+- [ ] Bugs triaged and prioritized
+
+---
+
+## 13. Maintenance and Support
+
+### 13.1 Ongoing Maintenance
+
+**Weekly Tasks:**
+- Review flaky tests
+- Update dependencies
+- Monitor test health metrics
+- Triage test failures
+
+**Monthly Tasks:**
+- Review test coverage
+- Update test documentation
+- Performance benchmark review
+- Cost optimization review
+
+**Quarterly Tasks:**
+- Strategic testing review
+- Tool and framework updates
+- Team training and knowledge sharing
+- Process improvements
+
+### 13.2 Support Model
+
+**Test Infrastructure Support:**
+- Dedicated Slack channel
+- On-call rotation for CI/CD issues
+- Runbook for common problems
+- Escalation path for critical issues
+
+**Developer Support:**
+- Testing office hours
+- Code review for test PRs
+- Pair programming for complex tests
+- Training materials and workshops
+
+---
+
+## 14. Appendices
+
+### 14.1 Glossary
+
+**Terms:**
+- **Acceptance Test:** End-to-end test with real infrastructure
+- **Unit Test:** Isolated test of individual functions
+- **Integration Test:** Test of component interactions
+- **Smoke Test:** Quick validation of basic functionality
+- **Regression Test:** Test to prevent reintroduction of bugs
+- **Flaky Test:** Test that intermittently fails
+- **Coverage:** Percentage of code executed by tests
+- **P0/P1/P2:** Priority levels (Critical/High/Medium)
+
+### 14.2 References
+
+**External Documentation:**
+- [Terraform Plugin SDK](https://github.com/hashicorp/terraform-plugin-sdk)
+- [Terraform Testing Best Practices](https://www.terraform.io/plugin/sdkv2/testing)
+- [Go Testing Documentation](https://pkg.go.dev/testing)
+- [GitHub Actions Documentation](https://docs.github.com/actions)
+
+**Internal Documentation:**
+- Task #11 Implementation Summary
+- Test Infrastructure Documentation
+- Contributing Guide
+- Code Review Guidelines
+
+### 14.3 Change Log
+
+**Version 1.0 (October 2, 2025):**
+- Initial PRD created
+- Comprehensive testing strategy defined
+- Timeline and milestones established
+- Success criteria defined
+
+---
+
+## Document Approval
+
+**Prepared By:** Engineering Team
+**Reviewed By:** [To be filled]
+**Approved By:** [To be filled]
+**Date:** October 2, 2025
+**Next Review:** November 2, 2025
+
+---
+
+**END OF DOCUMENT**

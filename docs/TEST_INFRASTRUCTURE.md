@@ -32,13 +32,18 @@ terraform-provider-aviatrix/
 ├── .github/workflows/
 │   └── test-matrix.yml          # CI/CD pipeline configuration
 ├── aviatrix/
-│   ├── testing_utils.go         # Test utility functions
-│   └── infrastructure_smoke_test.go  # Infrastructure validation tests
+│   ├── test_config.go           # Test configuration and defaults
+│   ├── test_helpers.go          # Test helper functions and environment
+│   ├── test_logger.go           # Test logging infrastructure
+│   ├── infrastructure_test.go   # Infrastructure validation tests
+│   └── smoke_test.go            # Comprehensive smoke tests
 ├── scripts/
-│   └── test-env-setup.sh        # Environment setup and validation
+│   ├── test-env-setup.sh        # Environment setup and validation
+│   └── test-runner.sh           # Test orchestration script
 ├── test-infra/                  # Terraform test infrastructure
 ├── Dockerfile                   # Multi-stage build for testing
 ├── docker-compose.test.yml      # Test orchestration
+├── GNUmakefile                  # Enhanced with test targets
 └── .env.test.example            # Environment variable template
 ```
 
@@ -114,24 +119,48 @@ This script will:
 
 ### Local Testing
 
+#### Quick Start
+
+For first-time setup and validation:
+
+```bash
+# Validate test environment
+make test-env-validate
+
+# Run smoke tests (no credentials required)
+make test-smoke
+
+# Run unit tests with coverage
+make test-unit
+
+# Generate coverage reports
+make test-coverage
+```
+
 #### Unit Tests
 
 Run all unit tests with coverage:
 
 ```bash
-make test
+make test-unit
 ```
+
+This will:
+- Run all unit tests with race detection
+- Generate coverage profile
+- Save test logs to `test-results/unit-tests.log`
+- Create coverage files in `test-results/coverage/`
 
 Or with Go directly:
 
 ```bash
-go test -v -race -coverprofile=coverage.out ./...
+go test -v -race -coverprofile=test-results/coverage.out -timeout=30m ./...
 ```
 
-Generate coverage report:
+Generate and view coverage report:
 
 ```bash
-go tool cover -html=coverage.out -o coverage.html
+make test-coverage
 ```
 
 #### Acceptance Tests
@@ -150,35 +179,122 @@ TF_ACC=1 go test -v ./aviatrix -run TestAccAviatrixGateway
 
 #### Smoke Tests
 
-Run infrastructure smoke tests:
+Run infrastructure smoke tests (no cloud credentials required):
 
 ```bash
-go test -v ./aviatrix -run TestInfrastructure
+make test-smoke
+```
+
+This validates:
+- Provider initialization
+- Provider schema
+- Resources and data sources registration
+- Test environment setup
+- Test utilities functionality
+- Logging infrastructure
+- Environment variable handling
+
+Or run specific smoke test categories:
+
+```bash
+# Run all smoke tests
+go test -v ./aviatrix -run "^TestSmoke"
+
+# Run infrastructure validation tests
+go test -v ./aviatrix -run "^TestInfrastructure"
+```
+
+#### Integration Tests by Provider
+
+Run integration tests for specific cloud providers:
+
+```bash
+# AWS tests only
+make test-integration-aws
+
+# Azure tests only
+make test-integration-azure
+
+# GCP tests only
+make test-integration-gcp
+
+# OCI tests only
+make test-integration-oci
+
+# All integration tests
+make test-integration-all
 ```
 
 ### Using Test Utilities
 
-The `testing_utils.go` file provides helper functions:
+The test infrastructure provides comprehensive utilities for writing tests:
+
+#### Test Environment (test_helpers.go)
 
 ```go
 import "github.com/AviatrixSystems/terraform-provider-aviatrix/v3/aviatrix"
 
 func TestMyResource(t *testing.T) {
-    // Get test configuration
-    config := aviatrix.GetTestConfig(t)
+    // Get test environment with cloud credentials
+    env := aviatrix.NewTestEnvironment()
+
+    // Validate cloud provider credentials
+    env.ValidateAWSCredentials(t)  // Skips if AWS disabled
+
+    // Use pre-built cloud pre-check functions
+    testCase := aviatrix.NewTestCase()
+    testCase.WithCloudPreCheck(t, aviatrix.PreCheckAWS)
 
     // Generate random resource name
-    name := aviatrix.RandomResourceName("gateway", "test")
-
-    // Check if provider tests should be skipped
-    aviatrix.PreCheckFunc("aws")(t)
-
-    // Create artifact directory for this test
-    dir := aviatrix.CreateTestArtifactDir(t)
-
-    // Save test artifact
-    aviatrix.SaveTestArtifact(t, "output.txt", "test output")
+    naming := aviatrix.NewResourceNamingConfig()
+    name := naming.GenerateName("gateway")
 }
+```
+
+#### Test Configuration (test_config.go)
+
+```go
+// Get default test configuration
+config := aviatrix.DefaultTestConfig()
+
+// Ensure test directories exist
+config.EnsureDirectories()
+
+// Get cloud provider test config
+cloudConfig := aviatrix.DefaultCloudProviderTestConfig()
+region := cloudConfig.AWSTestRegion
+```
+
+#### Test Logger (test_logger.go)
+
+```go
+// Create test logger with automatic file/console output
+logger, err := aviatrix.NewTestLogger(t, "my_test")
+if err != nil {
+    t.Fatal(err)
+}
+defer logger.Close()
+
+// Log at different levels
+logger.Info("Test starting...")
+logger.Debug("Debug information")  // Only if ENABLE_DETAILED_LOGS=true
+logger.Warn("Warning message")
+logger.Error("Error occurred: %v", err)
+
+// Log test steps
+logger.Step(1, "Creating gateway resource")
+logger.Resource("CREATE", "aviatrix_gateway", "test-gw-1")
+logger.Duration("gateway_creation", time.Since(start))
+
+// Save test artifacts
+logger.SaveArtifact("state.json", stateData)
+
+// Track test metrics
+metrics := aviatrix.NewTestMetrics("my_test")
+metrics.RecordResourceCreated()
+metrics.RecordAPICall()
+metrics.Finalize()
+fmt.Println(metrics.Summary())
 ```
 
 ## Docker-Based Testing
@@ -192,12 +308,23 @@ docker build --target test -t terraform-provider-aviatrix:test .
 docker build --target ci-test -t terraform-provider-aviatrix:ci-test .
 ```
 
+Or use the Makefile:
+
+```bash
+# Build all Docker test images
+make docker-build-test
+```
+
 ### Run Tests in Docker
 
 #### Unit Tests
 
 ```bash
-docker-compose -f docker-compose.test.yml up unit-tests
+# Using docker-compose
+docker-compose -f docker-compose.test.yml run --rm unit-tests
+
+# Using Make
+make docker-test
 ```
 
 #### Integration Tests
@@ -223,6 +350,44 @@ Run all tests:
 ```bash
 docker-compose -f docker-compose.test.yml up
 ```
+
+Clean up Docker test environment:
+
+```bash
+# Using docker-compose
+docker-compose -f docker-compose.test.yml down -v
+
+# Using Make
+make docker-test-clean
+```
+
+### Available Make Targets
+
+The GNUmakefile provides comprehensive test targets:
+
+#### Setup & Validation
+- `make test-env-validate` - Validate test environment setup
+- `make test-smoke` - Run smoke tests (no credentials required)
+- `make test-infra-validate` - Validate test infrastructure
+
+#### Unit & Coverage
+- `make test-unit` - Run unit tests with coverage
+- `make test-coverage` - Generate coverage reports
+- `make test-all` - Run all local tests (smoke + unit)
+
+#### Integration Testing
+- `make test-integration-aws` - Run AWS integration tests
+- `make test-integration-azure` - Run Azure integration tests
+- `make test-integration-gcp` - Run GCP integration tests
+- `make test-integration-oci` - Run OCI integration tests
+
+#### Docker Testing
+- `make docker-test` - Run tests in Docker
+- `make docker-test-clean` - Clean Docker test artifacts
+
+#### Legacy Targets
+- `make test` - Original test target
+- `make testacc` - Original acceptance test target
 
 ### Test Orchestration
 
