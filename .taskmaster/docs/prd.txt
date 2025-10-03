@@ -1,0 +1,883 @@
+# Product Requirements Document: Terraform Provider Aviatrix - 100% Testing Framework
+
+## Executive Summary
+
+### Project Overview
+Establish a comprehensive testing framework for the Terraform Provider Aviatrix to achieve 100% test coverage across all resources, data sources, and provider functionality. This initiative will ensure reliability, maintainability, and quality assurance for the Aviatrix Terraform ecosystem.
+
+### Objectives
+1. Achieve 100% test coverage for all Terraform resources (133 resources)
+2. Achieve 100% test coverage for all data sources (23 data sources)
+3. Implement multi-cloud integration testing across AWS, Azure, GCP, and OCI
+4. Establish automated CI/CD pipeline for continuous testing
+5. Create comprehensive test documentation and best practices
+6. Enable parallel test execution for faster feedback cycles
+
+### Success Criteria
+- All 133 resources have complete unit and integration tests
+- All 23 data sources have complete tests
+- Test coverage >= 100% for provider core functionality
+- Integration tests pass on all 4 cloud providers
+- CI/CD pipeline runs successfully on every PR
+- Test execution time < 60 minutes for full suite
+- Zero critical bugs escape to production
+
+## Background
+
+### Current State
+- Provider has 133 resources and 23 data sources
+- Existing test infrastructure partially implemented
+- Unit tests exist for many resources but coverage is incomplete
+- Integration tests are limited
+- No systematic approach to test coverage
+- Manual testing required for many scenarios
+
+### Problems to Solve
+1. **Incomplete Test Coverage**: Many resources lack comprehensive tests
+2. **Manual Testing Burden**: Heavy reliance on manual validation
+3. **Regression Risk**: Changes can introduce bugs in untested code paths
+4. **Multi-Cloud Complexity**: Testing across 4 cloud providers is challenging
+5. **Slow Feedback**: Long test execution times delay development
+6. **Documentation Gaps**: Limited test documentation and examples
+
+### Business Value
+- **Reduced Bugs**: Catch issues before production deployment
+- **Faster Development**: Automated testing enables rapid iteration
+- **Customer Confidence**: Higher quality releases build trust
+- **Lower Support Costs**: Fewer production issues reduce support burden
+- **Compliance**: Meet quality standards for enterprise customers
+- **Developer Productivity**: Clear test patterns accelerate feature development
+
+## Target Users
+
+### Primary Users
+1. **Terraform Provider Developers**: Writing and maintaining provider code
+2. **QA Engineers**: Validating provider functionality
+3. **DevOps Engineers**: Using provider in production environments
+4. **Platform Engineers**: Building automation on top of Aviatrix
+
+### User Personas
+
+#### Persona 1: Provider Developer (Sarah)
+- **Role**: Senior Go Developer
+- **Goals**: Add new resources quickly with confidence
+- **Pain Points**: Unclear test requirements, slow test feedback
+- **Needs**: Clear test templates, fast local testing, good examples
+
+#### Persona 2: QA Engineer (Michael)
+- **Role**: Quality Assurance Lead
+- **Goals**: Ensure all functionality works across cloud providers
+- **Pain Points**: Manual testing is time-consuming and error-prone
+- **Needs**: Automated integration tests, clear test reports, reproducible environments
+
+#### Persona 3: DevOps Engineer (Lisa)
+- **Role**: Infrastructure Automation Lead
+- **Goals**: Deploy reliable infrastructure with Terraform
+- **Pain Points**: Provider bugs cause production issues
+- **Needs**: Stable provider releases, comprehensive testing, quick bug fixes
+
+## Detailed Requirements
+
+### Phase 1: Test Infrastructure Foundation (Task #11) ✅ COMPLETE
+
+#### 1.1 Docker-Based Test Environment
+**Priority**: P0 (Critical)
+**Status**: ✅ Complete
+
+**Requirements**:
+- Multi-stage Dockerfile with 4 stages (builder, test, production, ci-test)
+- Pre-installed cloud provider CLIs (AWS CLI, Azure CLI, gcloud, OCI CLI)
+- Go 1.23+ with all testing tools
+- Terraform 1.6.6+ installed
+- Test result directories pre-configured
+- Non-root user for production stage
+
+**Acceptance Criteria**:
+- ✅ All 4 Docker stages build successfully
+- ✅ Cloud provider CLIs functional in ci-test stage
+- ✅ Test tools installed (go-junit-report, gocov, etc.)
+- ✅ Image sizes optimized with layer caching
+
+#### 1.2 GitHub Actions CI/CD Pipeline
+**Priority**: P0 (Critical)
+**Status**: ✅ Complete
+
+**Requirements**:
+- Matrix testing across Go versions (1.23, 1.24)
+- Matrix testing across cloud providers (AWS, Azure, GCP, OCI)
+- Parallel job execution for performance
+- Path filtering to skip unnecessary tests
+- Test result publishing with JUnit format
+- Coverage reporting (XML, HTML, SARIF)
+- Artifact retention for 30 days
+- Security scanning with Gosec
+- Automated test summary generation
+
+**Acceptance Criteria**:
+- ✅ Workflow validates successfully
+- ✅ Matrix jobs execute in parallel
+- ✅ Test results published to GitHub
+- ✅ Coverage reports generated
+- ✅ Security scan results available
+
+#### 1.3 Test Orchestration
+**Priority**: P0 (Critical)
+**Status**: ✅ Complete
+
+**Requirements**:
+- Docker Compose configuration for local testing
+- Separate services for unit, integration tests per provider
+- Health checks for long-running tests
+- Volume mounting for test artifacts
+- Environment variable management
+- Test result aggregation service
+
+**Acceptance Criteria**:
+- ✅ Docker Compose configuration valid
+- ✅ All services defined and functional
+- ✅ Health checks operational
+- ✅ Artifacts collected correctly
+
+#### 1.4 Test Utilities and Helpers
+**Priority**: P0 (Critical)
+**Status**: ✅ Complete
+
+**Requirements**:
+- TestEnvironment struct for configuration
+- TestLogger for structured logging
+- Cloud-specific pre-check functions
+- Random resource name generation
+- Artifact management helpers
+- Environment validation utilities
+
+**Acceptance Criteria**:
+- ✅ All utilities implemented and tested
+- ✅ Smoke tests validate functionality
+- ✅ Documentation complete
+
+### Phase 2: Resource Testing Framework (Tasks #12-15)
+
+#### 2.1 Unit Test Framework for Resources
+**Priority**: P0 (Critical)
+**Estimated Effort**: 4 weeks
+
+**Requirements**:
+- Test template for resource CRUD operations
+- Schema validation tests
+- Input validation tests
+- Error handling tests
+- State management tests
+- Import functionality tests
+- Update/modification tests
+- Resource dependency tests
+
+**Test Coverage Requirements**:
+- Create operation: happy path + error cases
+- Read operation: existing + non-existent resources
+- Update operation: all updateable fields
+- Delete operation: successful + already deleted
+- Import operation: valid + invalid resource IDs
+- Schema validation: all required/optional fields
+- Computed fields: verify correct computation
+- Default values: verify correct defaults applied
+
+**Acceptance Criteria**:
+- [ ] Test template documented with examples
+- [ ] 100% of resources have unit tests
+- [ ] All CRUD operations tested
+- [ ] Edge cases covered
+- [ ] Test coverage >= 95% for resource files
+
+#### 2.2 Integration Test Framework
+**Priority**: P0 (Critical)
+**Estimated Effort**: 6 weeks
+
+**Requirements**:
+- Multi-cloud test infrastructure
+- Resource lifecycle testing (create → read → update → delete)
+- Cross-resource dependency testing
+- State consistency validation
+- Real cloud provider API integration
+- Test data cleanup automation
+- Parallel test execution support
+- Test isolation mechanisms
+
+**Cloud Provider Requirements**:
+- **AWS**: VPC, subnet, gateway resources
+- **Azure**: VNet, resource group, gateway resources
+- **GCP**: Network, subnet, gateway resources
+- **OCI**: VCN, subnet, gateway resources
+
+**Acceptance Criteria**:
+- [ ] Integration test framework implemented
+- [ ] Tests run on all 4 cloud providers
+- [ ] Resource cleanup automated
+- [ ] Test isolation verified
+- [ ] Parallel execution working
+- [ ] Test execution time < 60 minutes
+
+#### 2.3 Data Source Testing Framework
+**Priority**: P1 (High)
+**Estimated Effort**: 2 weeks
+
+**Requirements**:
+- Test template for data sources
+- Read operation validation
+- Filter/query parameter testing
+- Non-existent resource handling
+- Multiple result handling
+- Schema validation
+
+**Acceptance Criteria**:
+- [ ] Test template created
+- [ ] All 23 data sources have tests
+- [ ] Query parameters tested
+- [ ] Error cases covered
+- [ ] Test coverage >= 90% for data source files
+
+### Phase 3: Advanced Testing Capabilities (Tasks #16-20)
+
+#### 3.1 Acceptance Test Enhancement
+**Priority**: P1 (High)
+**Estimated Effort**: 3 weeks
+
+**Requirements**:
+- Complex scenario testing
+- Multi-resource workflows
+- State migration testing
+- Version upgrade testing
+- Configuration drift detection
+- Terraform plan validation
+- Apply/destroy idempotency testing
+
+**Acceptance Criteria**:
+- [ ] Complex scenarios defined and tested
+- [ ] State migration tests passing
+- [ ] Upgrade path validated
+- [ ] Drift detection working
+- [ ] Idempotency verified
+
+#### 3.2 Performance and Load Testing
+**Priority**: P2 (Medium)
+**Estimated Effort**: 2 weeks
+
+**Requirements**:
+- Benchmark tests for critical operations
+- Resource creation performance baselines
+- API rate limiting tests
+- Concurrent resource creation tests
+- Large-scale deployment testing
+- Performance regression detection
+
+**Acceptance Criteria**:
+- [ ] Benchmark suite implemented
+- [ ] Performance baselines established
+- [ ] Rate limiting handled correctly
+- [ ] Concurrent operations tested
+- [ ] Performance metrics tracked
+
+#### 3.3 Chaos Engineering and Resilience
+**Priority**: P2 (Medium)
+**Estimated Effort**: 3 weeks
+
+**Requirements**:
+- Network failure simulation
+- API timeout handling
+- Partial failure recovery
+- Retry mechanism validation
+- State consistency under failures
+- Controller reconnection testing
+
+**Acceptance Criteria**:
+- [ ] Chaos tests implemented
+- [ ] Failure scenarios covered
+- [ ] Retry logic validated
+- [ ] State consistency verified
+- [ ] Recovery mechanisms tested
+
+#### 3.4 Security Testing
+**Priority**: P1 (High)
+**Estimated Effort**: 2 weeks
+
+**Requirements**:
+- Credential handling validation
+- Sensitive data masking tests
+- TLS/SSL validation
+- API authentication testing
+- Authorization boundary testing
+- Security regression tests
+
+**Acceptance Criteria**:
+- [ ] Security test suite created
+- [ ] Credential handling secure
+- [ ] Sensitive data protected
+- [ ] Authentication validated
+- [ ] Authorization boundaries tested
+
+### Phase 4: Test Maintenance and Quality (Tasks #21-25)
+
+#### 4.1 Test Documentation
+**Priority**: P1 (High)
+**Estimated Effort**: 2 weeks
+
+**Requirements**:
+- Test writing guidelines
+- Test template documentation
+- Best practices guide
+- Troubleshooting guide
+- CI/CD usage documentation
+- Test coverage reporting guide
+
+**Acceptance Criteria**:
+- [ ] All documentation written
+- [ ] Examples provided
+- [ ] Troubleshooting scenarios covered
+- [ ] Documentation reviewed and approved
+
+#### 4.2 Test Data Management
+**Priority**: P2 (Medium)
+**Estimated Effort**: 2 weeks
+
+**Requirements**:
+- Test data generators
+- Fixture management system
+- Test data cleanup automation
+- Shared test data repository
+- Data versioning for compatibility tests
+
+**Acceptance Criteria**:
+- [ ] Data generators implemented
+- [ ] Fixtures organized and documented
+- [ ] Cleanup automation working
+- [ ] Repository established
+- [ ] Versioning system in place
+
+#### 4.3 Continuous Improvement
+**Priority**: P2 (Medium)
+**Estimated Effort**: Ongoing
+
+**Requirements**:
+- Test coverage monitoring
+- Flaky test detection and fixing
+- Performance trend analysis
+- Test result dashboards
+- Regular test review cycles
+- Test debt tracking
+
+**Acceptance Criteria**:
+- [ ] Monitoring dashboard live
+- [ ] Flaky test tracking system active
+- [ ] Performance trends visible
+- [ ] Review process established
+- [ ] Test debt tracked and prioritized
+
+## Technical Specifications
+
+### Test Technology Stack
+
+#### Core Testing
+- **Framework**: Go testing package + Terraform Plugin SDK v2
+- **Assertions**: testify/assert
+- **Mocking**: testify/mock (where applicable)
+- **Coverage**: go test -cover, gocov, gocov-xml
+
+#### Integration Testing
+- **Infrastructure**: Terraform 1.6.6+
+- **Cloud Providers**: AWS SDK, Azure SDK, GCP SDK, OCI SDK
+- **Orchestration**: Docker Compose
+- **Parallelization**: Go test -parallel
+
+#### CI/CD
+- **Platform**: GitHub Actions
+- **Container**: Docker multi-stage builds
+- **Reporting**: go-junit-report, EnricoMi/publish-unit-test-result-action
+- **Security**: Gosec, GitHub Code Scanning
+
+#### Artifact Management
+- **Storage**: GitHub Actions artifacts (30-day retention)
+- **Formats**: JUnit XML, Coverage XML/HTML, SARIF
+- **Logs**: Structured JSON logs, plain text logs
+
+### Test Environment Configuration
+
+#### Required Environment Variables
+```
+# Core
+TF_ACC=1
+GO_TEST_TIMEOUT=30m
+
+# Aviatrix
+AVIATRIX_CONTROLLER_IP
+AVIATRIX_USERNAME
+AVIATRIX_PASSWORD
+
+# AWS
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+AWS_ACCOUNT_NUMBER
+AWS_DEFAULT_REGION
+
+# Azure
+ARM_CLIENT_ID
+ARM_CLIENT_SECRET
+ARM_SUBSCRIPTION_ID
+ARM_TENANT_ID
+
+# GCP
+GOOGLE_APPLICATION_CREDENTIALS
+GOOGLE_PROJECT
+
+# OCI
+OCI_USER_ID
+OCI_TENANCY_ID
+OCI_FINGERPRINT
+OCI_PRIVATE_KEY_PATH
+OCI_REGION
+
+# Skip Flags
+SKIP_ACCOUNT_AWS
+SKIP_ACCOUNT_AZURE
+SKIP_ACCOUNT_GCP
+SKIP_ACCOUNT_OCI
+```
+
+#### Test Execution Environments
+
+**Local Development**:
+- Go 1.23+ installed locally
+- Docker optional for containerized testing
+- Cloud provider CLIs installed
+- Environment variables configured in .env.test
+
+**CI/CD (GitHub Actions)**:
+- Ubuntu latest runners
+- Docker buildx for multi-stage builds
+- Matrix testing across providers
+- Secrets configured in repository settings
+
+**Integration Testing**:
+- Docker Compose orchestration
+- Isolated networks per cloud provider
+- Terraform infrastructure as code
+- Automated cleanup on completion
+
+### Test Patterns and Best Practices
+
+#### Resource Test Pattern
+```go
+func TestAccAviatrixResource_basic(t *testing.T) {
+    rName := RandomResourceName("test", "resource")
+
+    resource.Test(t, resource.TestCase{
+        PreCheck:     func() { testAccPreCheck(t) },
+        Providers:    testAccProviders,
+        CheckDestroy: testAccCheckResourceDestroy,
+        Steps: []resource.TestStep{
+            {
+                Config: testAccResourceConfig_basic(rName),
+                Check: resource.ComposeTestCheckFunc(
+                    testAccCheckResourceExists("aviatrix_resource.test"),
+                    resource.TestCheckResourceAttr("aviatrix_resource.test", "name", rName),
+                ),
+            },
+            {
+                ResourceName:      "aviatrix_resource.test",
+                ImportState:       true,
+                ImportStateVerify: true,
+            },
+        },
+    })
+}
+```
+
+#### Data Source Test Pattern
+```go
+func TestAccAviatrixDataSource_basic(t *testing.T) {
+    rName := RandomResourceName("test", "datasource")
+
+    resource.Test(t, resource.TestCase{
+        PreCheck:  func() { testAccPreCheck(t) },
+        Providers: testAccProviders,
+        Steps: []resource.TestStep{
+            {
+                Config: testAccDataSourceConfig_basic(rName),
+                Check: resource.ComposeTestCheckFunc(
+                    resource.TestCheckResourceAttrSet("data.aviatrix_datasource.test", "id"),
+                    resource.TestCheckResourceAttr("data.aviatrix_datasource.test", "name", rName),
+                ),
+            },
+        },
+    })
+}
+```
+
+#### Integration Test Pattern
+```go
+func TestAccAviatrixIntegration_multiCloud(t *testing.T) {
+    if testing.Short() {
+        t.Skip("Skipping integration test in short mode")
+    }
+
+    env := NewTestEnvironment()
+    env.ValidateAWSCredentials(t)
+    env.ValidateAzureCredentials(t)
+
+    // Test implementation
+}
+```
+
+### Performance Requirements
+
+#### Test Execution Time
+- **Unit tests**: < 5 minutes for full suite
+- **Smoke tests**: < 30 seconds
+- **Integration tests per provider**: < 15 minutes
+- **Full test suite (all providers)**: < 60 minutes
+- **Security scans**: < 3 minutes
+
+#### Resource Requirements
+- **Memory**: < 4GB per test process
+- **CPU**: Utilize available cores with -parallel flag
+- **Disk**: < 1GB for test artifacts
+- **Network**: Adequate bandwidth for cloud API calls
+
+#### Reliability Requirements
+- **Flaky test rate**: < 1% of all tests
+- **Test success rate**: > 99% on main branch
+- **False positive rate**: < 0.5%
+- **Test isolation**: 100% (no cross-test dependencies)
+
+## Resource Coverage Requirements
+
+### Priority 1 Resources (Core Infrastructure) - 40 Resources
+Must have 100% test coverage by end of Phase 2:
+
+**Account Management**:
+- aviatrix_account
+- aviatrix_account_user
+- aviatrix_access_account
+
+**Gateway Resources**:
+- aviatrix_gateway
+- aviatrix_transit_gateway
+- aviatrix_spoke_gateway
+- aviatrix_edge_spoke
+- aviatrix_edge_csp
+- aviatrix_edge_zededa
+- aviatrix_edge_vm_selfmanaged
+
+**Network Resources**:
+- aviatrix_vpc
+- aviatrix_transit_vpc
+- aviatrix_spoke_vpc
+- aviatrix_aws_tgw
+- aviatrix_azure_vnet
+- aviatrix_gcp_network
+
+**Connectivity**:
+- aviatrix_transit_gateway_peering
+- aviatrix_spoke_transit_attachment
+- aviatrix_aws_tgw_vpc_attachment
+- aviatrix_site2cloud
+- aviatrix_tunnel
+
+### Priority 2 Resources (Advanced Features) - 50 Resources
+Must have 90% test coverage by end of Phase 2:
+
+**FireNet**:
+- aviatrix_firenet
+- aviatrix_firewall_instance
+- aviatrix_firewall_instance_association
+- aviatrix_firewall_management_access
+- aviatrix_centralized_transit_firenet
+
+**Distributed Firewalling**:
+- aviatrix_distributed_firewalling_config
+- aviatrix_distributed_firewalling_policy_list
+- aviatrix_distributed_firewalling_intra_vpc
+
+**Security**:
+- aviatrix_fqdn
+- aviatrix_fqdn_tag_rule
+- aviatrix_firewall_policy
+- aviatrix_segmentation_security_domain
+
+**VPN**:
+- aviatrix_geo_vpn
+- aviatrix_remote_syslog
+- aviatrix_vpn_user
+- aviatrix_vpn_profile
+
+### Priority 3 Resources (Supporting Features) - 43 Resources
+Must have 80% test coverage by end of Phase 3:
+
+**Controller Configuration**:
+- aviatrix_controller_config
+- aviatrix_controller_email_config
+- aviatrix_controller_cert_domain_config
+- aviatrix_controller_bgp_max_as_limit_config
+
+**Advanced Networking**:
+- aviatrix_aws_tgw_connect
+- aviatrix_aws_tgw_connect_peer
+- aviatrix_aws_tgw_directconnect
+- aviatrix_azure_vng_conn
+- aviatrix_azure_spoke_native_peering
+
+**Monitoring & Operations**:
+- aviatrix_cloudwatch_agent
+- aviatrix_datadog_agent
+- aviatrix_copilot_association
+- aviatrix_splunk_logging
+
+### Data Source Coverage - 23 Data Sources
+All data sources must have 90% test coverage by end of Phase 2:
+
+**Account & Identity**:
+- aviatrix_account
+- aviatrix_caller_identity
+
+**Gateway Data Sources**:
+- aviatrix_gateway
+- aviatrix_transit_gateway
+- aviatrix_spoke_gateway
+- aviatrix_transit_gateways
+- aviatrix_spoke_gateways
+
+**Network Data Sources**:
+- aviatrix_vpc
+- aviatrix_vpc_tracker
+- aviatrix_network_domains
+
+**Firewall Data Sources**:
+- aviatrix_firenet
+- aviatrix_firewall
+- aviatrix_firewall_instance_images
+- aviatrix_firenet_vendor_integration
+
+**Smart Groups & DCF**:
+- aviatrix_smart_groups
+- aviatrix_dcf_webgroups
+- aviatrix_dcf_mwp_attachment_points
+
+## Test Coverage Metrics and Reporting
+
+### Coverage Tracking
+- **Statement Coverage**: >= 95% for all files
+- **Branch Coverage**: >= 90% for all files
+- **Function Coverage**: 100% for exported functions
+- **Integration Coverage**: 100% of critical user workflows
+
+### Reporting Requirements
+- Daily coverage reports on main branch
+- Per-PR coverage diff (must not decrease)
+- Coverage badges in README
+- Historical coverage trends
+- Uncovered code analysis
+
+### Quality Gates
+**Merge Requirements**:
+- All tests pass (unit + integration)
+- Coverage does not decrease
+- No new critical security issues
+- Code review approved
+- Documentation updated
+
+**Release Requirements**:
+- 100% of P0 resources tested
+- >= 90% overall test coverage
+- All integration tests pass on all 4 clouds
+- Performance benchmarks within acceptable range
+- Security scan clean
+
+## Testing Workflow
+
+### Development Workflow
+1. Developer writes code for new resource/feature
+2. Developer writes unit tests following templates
+3. Developer runs local unit tests: `go test ./aviatrix`
+4. Developer runs smoke tests: `go test -run TestSmoke`
+5. Developer commits and pushes to feature branch
+6. CI runs unit tests and reports coverage
+7. Developer addresses any failures
+8. Developer requests code review
+
+### Integration Testing Workflow
+1. PR approved and ready for integration testing
+2. CI triggers integration test matrix
+3. Tests run in parallel across cloud providers
+4. Results aggregated and reported
+5. Any failures investigated
+6. Fixes applied and re-tested
+7. PR merged after all tests pass
+
+### Release Testing Workflow
+1. Release candidate tagged
+2. Full test suite executes (all providers)
+3. Performance benchmarks run
+4. Security scans execute
+5. Test results reviewed
+6. Release approved or blocked
+7. Release notes include test coverage metrics
+
+## Risk Management
+
+### Technical Risks
+
+**Risk**: Test infrastructure failure
+- **Probability**: Medium
+- **Impact**: High
+- **Mitigation**: Redundant test environments, automated health checks, quick rollback capability
+
+**Risk**: Cloud provider API changes breaking tests
+- **Probability**: Medium
+- **Impact**: Medium
+- **Mitigation**: Version pinning, deprecation monitoring, compatibility tests
+
+**Risk**: Slow test execution blocking development
+- **Probability**: Low
+- **Impact**: High
+- **Mitigation**: Parallel execution, test optimization, selective test running
+
+**Risk**: Flaky tests reducing confidence
+- **Probability**: Medium
+- **Impact**: Medium
+- **Mitigation**: Retry logic, flaky test quarantine, root cause analysis
+
+### Resource Risks
+
+**Risk**: Insufficient cloud provider test accounts
+- **Probability**: Low
+- **Impact**: High
+- **Mitigation**: Budget allocation, separate test accounts per provider
+
+**Risk**: Test environment cost overruns
+- **Probability**: Medium
+- **Impact**: Medium
+- **Mitigation**: Resource cleanup automation, cost monitoring, usage limits
+
+### Timeline Risks
+
+**Risk**: Scope creep delaying completion
+- **Probability**: High
+- **Impact**: Medium
+- **Mitigation**: Strict prioritization, phased approach, regular reviews
+
+**Risk**: Dependencies on external teams
+- **Probability**: Low
+- **Impact**: Low
+- **Mitigation**: Early coordination, fallback plans
+
+## Success Metrics and KPIs
+
+### Quantitative Metrics
+- **Test Coverage**: >= 100% (all resources and data sources)
+- **Code Coverage**: >= 95% statement coverage
+- **Test Pass Rate**: >= 99% on main branch
+- **Test Execution Time**: <= 60 minutes for full suite
+- **Flaky Test Rate**: < 1% of all tests
+- **Bug Escape Rate**: < 2% of releases
+- **Mean Time to Detection (MTTD)**: < 24 hours
+- **Mean Time to Resolution (MTTR)**: < 72 hours
+
+### Qualitative Metrics
+- Developer satisfaction with test infrastructure
+- Confidence in releases
+- Ease of writing new tests
+- Test documentation quality
+- CI/CD reliability
+
+### Business Impact Metrics
+- Reduction in production incidents
+- Faster time to market for new features
+- Reduced support ticket volume
+- Increased customer satisfaction scores
+- Higher adoption rates
+
+## Timeline and Milestones
+
+### Phase 1: Foundation (Weeks 1-2) ✅ COMPLETE
+- ✅ Docker test environment setup
+- ✅ GitHub Actions CI/CD pipeline
+- ✅ Test orchestration with Docker Compose
+- ✅ Smoke tests implementation
+- ✅ Documentation
+
+### Phase 2: Core Testing (Weeks 3-10)
+- **Week 3-4**: Resource test framework and templates
+- **Week 5-6**: P0 resource tests (40 resources)
+- **Week 7-8**: P1 resource tests (50 resources)
+- **Week 9**: Data source tests (23 data sources)
+- **Week 10**: Integration test framework
+
+### Phase 3: Advanced Testing (Weeks 11-16)
+- **Week 11-12**: P2 resource tests (43 resources)
+- **Week 13**: Acceptance test enhancement
+- **Week 14**: Performance and load testing
+- **Week 15**: Security testing
+- **Week 16**: Chaos engineering
+
+### Phase 4: Quality and Maintenance (Weeks 17-20)
+- **Week 17-18**: Test documentation
+- **Week 19**: Test data management
+- **Week 20**: Continuous improvement setup
+
+### Key Milestones
+- ✅ **M1**: Test infrastructure complete (Week 2)
+- [ ] **M2**: 50% resource coverage (Week 7)
+- [ ] **M3**: 100% P0 resource coverage (Week 8)
+- [ ] **M4**: All data sources tested (Week 9)
+- [ ] **M5**: 100% overall coverage (Week 16)
+- [ ] **M6**: Documentation complete (Week 18)
+- [ ] **M7**: Project complete (Week 20)
+
+## Dependencies and Constraints
+
+### Technical Dependencies
+- Go 1.23+ toolchain
+- Terraform 1.6.6+ CLI
+- Docker and Docker Compose
+- GitHub Actions runtime
+- Cloud provider test accounts (AWS, Azure, GCP, OCI)
+- Aviatrix Controller test instance
+
+### External Dependencies
+- Cloud provider API availability
+- GitHub infrastructure uptime
+- Terraform Plugin SDK updates
+- Aviatrix API stability
+
+### Constraints
+- Test execution cost budget
+- Cloud provider rate limits
+- CI/CD runner availability
+- Development team capacity
+
+## Appendix
+
+### Glossary
+- **Acceptance Test**: End-to-end test using real Terraform and cloud providers
+- **Unit Test**: Isolated test of individual functions/methods
+- **Integration Test**: Test of multiple components working together
+- **Smoke Test**: Quick validation that basic functionality works
+- **Chaos Test**: Test resilience under failure conditions
+- **Flaky Test**: Test that intermittently fails without code changes
+
+### References
+- Terraform Plugin SDK v2 Documentation
+- Go Testing Best Practices
+- HashiCorp Provider Testing Guidelines
+- Aviatrix API Documentation
+- GitHub Actions Documentation
+
+### Change Log
+- 2025-10-02: Initial PRD created
+- 2025-10-02: Phase 1 marked complete
+- 2025-10-02: Updated with comprehensive resource breakdown
+
+---
+
+**Document Status**: Draft v2.0
+**Last Updated**: 2025-10-02
+**Approved By**: [Pending]
+**Next Review**: 2025-10-09

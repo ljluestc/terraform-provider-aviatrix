@@ -34,6 +34,62 @@ test: fmtcheck
 testacc: fmtcheck
 	TF_ACC=1 go test $(TEST) -v $(TESTARGS) -timeout 1200m
 
+# Enhanced test targets for test infrastructure
+test-unit: fmtcheck
+	@echo "==> Running unit tests with coverage..."
+	@mkdir -p test-results test-results/coverage
+	go test -v -race -coverprofile=test-results/coverage.out -timeout=30m ./... 2>&1 | tee test-results/unit-tests.log
+
+test-smoke: fmtcheck
+	@echo "==> Running smoke tests..."
+	@mkdir -p test-results
+	TF_ACC=0 go test -v -run TestSmoke ./aviatrix/... -timeout=5m 2>&1 | tee test-results/smoke-tests.log
+
+test-integration-aws: fmtcheck
+	@echo "==> Running AWS integration tests..."
+	@./scripts/test-env-setup.sh
+	@export TF_ACC=1 SKIP_ACCOUNT_AZURE=yes SKIP_ACCOUNT_GCP=yes SKIP_ACCOUNT_OCI=yes && \
+		./scripts/test-runner.sh
+
+test-integration-azure: fmtcheck
+	@echo "==> Running Azure integration tests..."
+	@./scripts/test-env-setup.sh
+	@export TF_ACC=1 SKIP_ACCOUNT_AWS=yes SKIP_ACCOUNT_GCP=yes SKIP_ACCOUNT_OCI=yes && \
+		./scripts/test-runner.sh
+
+test-integration-gcp: fmtcheck
+	@echo "==> Running GCP integration tests..."
+	@./scripts/test-env-setup.sh
+	@export TF_ACC=1 SKIP_ACCOUNT_AWS=yes SKIP_ACCOUNT_AZURE=yes SKIP_ACCOUNT_OCI=yes && \
+		./scripts/test-runner.sh
+
+test-integration-oci: fmtcheck
+	@echo "==> Running OCI integration tests..."
+	@./scripts/test-env-setup.sh
+	@export TF_ACC=1 SKIP_ACCOUNT_AWS=yes SKIP_ACCOUNT_AZURE=yes SKIP_ACCOUNT_GCP=yes && \
+		./scripts/test-runner.sh
+
+test-coverage: test-unit
+	@echo "==> Generating coverage reports..."
+	@go tool cover -html=test-results/coverage.out -o test-results/coverage.html
+	@go tool cover -func=test-results/coverage.out | grep total | awk '{print "Total coverage: " $$3}'
+
+docker-test:
+	@echo "==> Running tests in Docker..."
+	@docker-compose -f docker-compose.test.yml run --rm unit-tests
+
+docker-test-clean:
+	@echo "==> Cleaning up Docker test environment..."
+	@docker-compose -f docker-compose.test.yml down -v
+	@rm -rf test-results/*
+
+test-env-validate:
+	@echo "==> Validating test environment..."
+	@./scripts/test-env-setup.sh
+
+test-all: test-unit test-smoke
+	@echo "==> All tests completed successfully"
+
 vet:
 	@echo "go vet ."
 	@go vet $$(go list ./... | grep -v vendor/) ; if [ $$? -eq 1 ]; then \
@@ -89,4 +145,6 @@ ifeq (,$(wildcard $(GOPATH)/src/$(WEBSITE_REPO)))
 endif
 	@$(MAKE) -C $(GOPATH)/src/$(WEBSITE_REPO) website-provider-test PROVIDER_PATH=$(shell pwd) PROVIDER_NAME=$(PKG_NAME)
 
-.PHONY: build test testacc vet fmt fmtcheck errcheck tools vendor-status test-compile website-lint website website-test
+.PHONY: build test testacc vet fmt fmtcheck errcheck tools vendor-status test-compile website-lint website website-test \
+	test-unit test-smoke test-integration-aws test-integration-azure test-integration-gcp test-integration-oci \
+	test-coverage docker-test docker-test-clean test-env-validate test-all

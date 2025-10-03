@@ -139,8 +139,8 @@ func getEnvWithDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
-// TestCheckResourceAttrSet is a helper to check if a resource attribute is set
-func TestCheckResourceAttrSet(name, key string) resource.TestCheckFunc {
+// CheckResourceAttrSet is a helper to check if a resource attribute is set
+func CheckResourceAttrSet(name, key string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		rs, ok := s.RootModule().Resources[name]
 		if !ok {
@@ -156,7 +156,7 @@ func TestCheckResourceAttrSet(name, key string) resource.TestCheckFunc {
 }
 
 // TestCheckResourceAttrNotEmpty checks that an attribute exists and is not empty
-func TestCheckResourceAttrNotEmpty(name, key string) resource.TestCheckFunc {
+func CheckResourceAttrNotEmpty(name, key string) resource.TestCheckFunc {
 	return resource.TestCheckResourceAttrSet(name, key)
 }
 

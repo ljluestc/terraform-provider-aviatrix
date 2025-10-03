@@ -1,34 +1,56 @@
 version: '3.8'
 
+networks:
+  test-network:
+    driver: bridge
+
 services:
   # Unit tests
   unit-tests:
     build:
       context: .
       target: test
+    networks:
+      - test-network
     environment:
-      - GO_TEST_TIMEOUT=30m
-      - GOMAXPROCS=4
+      - GO_TEST_TIMEOUT=${GO_TEST_TIMEOUT:-30m}
+      - GOMAXPROCS=${GOMAXPROCS:-4}
+      - TEST_ARTIFACT_DIR=/app/test-results
+      - ENABLE_PARALLEL_TESTS=${ENABLE_PARALLEL_TESTS:-true}
+      - ENABLE_DETAILED_LOGS=${ENABLE_DETAILED_LOGS:-false}
     volumes:
       - ./test-results:/app/test-results
+      - ./test-data:/app/test-data
     command: >
       sh -c "
-        mkdir -p /app/test-results &&
+        mkdir -p /app/test-results /app/test-results/coverage &&
+        echo 'Running unit tests...' &&
         go test -v -timeout=30m -race -coverprofile=/app/test-results/coverage.out ./... 2>&1 |
         tee /app/test-results/unit-tests.log |
         go-junit-report -set-exit-code > /app/test-results/unit-tests.xml &&
-        gocov convert /app/test-results/coverage.out | gocov-xml > /app/test-results/coverage.xml
+        echo 'Generating coverage reports...' &&
+        gocov convert /app/test-results/coverage.out | gocov-xml > /app/test-results/coverage.xml &&
+        go tool cover -html=/app/test-results/coverage.out -o /app/test-results/coverage/coverage.html &&
+        echo 'Unit tests completed!'
       "
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/test-results/unit-tests.xml"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # Integration tests with AWS
   integration-tests-aws:
     build:
       context: .
       target: ci-test
+    networks:
+      - test-network
     environment:
       - AWS_ACCESS_KEY_ID
       - AWS_SECRET_ACCESS_KEY
-      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
       - AVIATRIX_CONTROLLER_IP
       - AVIATRIX_USERNAME
       - AVIATRIX_PASSWORD
@@ -37,20 +59,29 @@ services:
       - SKIP_ACCOUNT_AZURE=yes
       - SKIP_ACCOUNT_GCP=yes
       - SKIP_ACCOUNT_OCI=yes
+      - TEST_ARTIFACT_DIR=/app/test-results
     volumes:
       - ./test-results:/app/test-results
       - ./test-infra:/app/test-infra
+      - ./test-data:/app/test-data
     command: >
       sh -c "
+        set -e &&
         mkdir -p /app/test-results &&
+        echo 'Initializing AWS integration tests...' &&
         cd /app/test-infra &&
         terraform init &&
         terraform apply -auto-approve &&
         source ./cmdExportOutput.sh &&
         cd /app &&
-        ./test-infra/runAccTest.sh Gateway 2>&1 |
-        tee /app/test-results/integration-aws.log
+        echo 'Running AWS integration tests...' &&
+        timeout 3600 ./test-infra/runAccTest.sh Gateway 2>&1 |
+        tee /app/test-results/integration-aws.log &&
+        echo 'AWS integration tests completed!'
       "
+    depends_on:
+      unit-tests:
+        condition: service_completed_successfully
 
   # Integration tests with Azure
   integration-tests-azure:
@@ -149,5 +180,42 @@ services:
         tee /app/test-results/integration-oci.log
       "
 
+  # Test result aggregator and report generator
+  test-aggregator:
+    image: alpine:3.19
+    networks:
+      - test-network
+    volumes:
+      - ./test-results:/test-results
+      - ./scripts:/scripts
+    command: >
+      sh -c "
+        echo 'Aggregating test results...' &&
+        mkdir -p /test-results/summary &&
+        echo '# Test Results Summary' > /test-results/summary/report.md &&
+        echo '' >> /test-results/summary/report.md &&
+        echo '## Unit Tests' >> /test-results/summary/report.md &&
+        if [ -f /test-results/unit-tests.xml ]; then
+          echo '✓ Unit tests completed' >> /test-results/summary/report.md
+        else
+          echo '✗ Unit tests failed or not run' >> /test-results/summary/report.md
+        fi &&
+        echo '' >> /test-results/summary/report.md &&
+        echo '## Integration Tests' >> /test-results/summary/report.md &&
+        for provider in aws azure gcp oci; do
+          if [ -f /test-results/integration-\$provider.log ]; then
+            echo \"✓ \$provider tests completed\" >> /test-results/summary/report.md
+          else
+            echo \"⊗ \$provider tests not run\" >> /test-results/summary/report.md
+          fi
+        done &&
+        echo '' >> /test-results/summary/report.md &&
+        echo 'Test aggregation completed!' &&
+        cat /test-results/summary/report.md
+      "
+    depends_on:
+      - unit-tests
+
 volumes:
   test-results:
+  test-data:

@@ -97,6 +97,14 @@ jobs:
         with:
           name: unit-test-results-go${{ matrix.go-version }}
           path: test-results/
+          retention-days: 30
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-results/unit-tests.xml
+          check_name: Unit Tests (Go ${{ matrix.go-version }})
 
   docker-build:
     name: docker-build
@@ -302,12 +310,25 @@ jobs:
               tee /app/test-results/integration-${{ matrix.provider }}.log
             "
 
+      - name: Generate test report
+        if: always()
+        run: |
+          echo "# Integration Test Results - ${{ matrix.provider }}" > test-results/summary.md
+          echo "" >> test-results/summary.md
+          if [ -f test-results/integration-${{ matrix.provider }}.log ]; then
+            echo "## Test Execution Log" >> test-results/summary.md
+            echo '```' >> test-results/summary.md
+            tail -n 50 test-results/integration-${{ matrix.provider }}.log >> test-results/summary.md
+            echo '```' >> test-results/summary.md
+          fi
+
       - name: Upload integration test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: integration-test-results-${{ matrix.provider }}
           path: test-results/
+          retention-days: 30
 
   security-scan:
     name: security-scan
