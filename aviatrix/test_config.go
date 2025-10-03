@@ -21,11 +21,11 @@ type TestConfig struct {
 	OCI   *OCITestConfig
 
 	// Test Execution Configuration
-	TestTimeout      string
-	TestArtifactDir  string
-	EnableParallel   bool
+	TestTimeout       string
+	TestArtifactDir   string
+	EnableParallel    bool
 	EnableDetailedLog bool
-	MaxRetries       int
+	MaxRetries        int
 }
 
 // AWSTestConfig contains AWS-specific test configuration
@@ -72,11 +72,11 @@ func LoadTestConfig() (*TestConfig, error) {
 		Username:     os.Getenv("AVIATRIX_USERNAME"),
 		Password:     os.Getenv("AVIATRIX_PASSWORD"),
 
-		TestTimeout:      GetEnvOrDefault("GO_TEST_TIMEOUT", "30m"),
-		TestArtifactDir:  GetEnvOrDefault("TEST_ARTIFACT_DIR", "./test-results"),
-		EnableParallel:   parseBool(os.Getenv("ENABLE_PARALLEL_TESTS"), true),
+		TestTimeout:       GetEnvOrDefault("GO_TEST_TIMEOUT", "30m"),
+		TestArtifactDir:   GetEnvOrDefault("TEST_ARTIFACT_DIR", "./test-results"),
+		EnableParallel:    parseBool(os.Getenv("ENABLE_PARALLEL_TESTS"), true),
 		EnableDetailedLog: parseBool(os.Getenv("ENABLE_DETAILED_LOGS"), false),
-		MaxRetries:       parseInt(os.Getenv("TEST_MAX_RETRIES"), 3),
+		MaxRetries:        parseInt(os.Getenv("TEST_MAX_RETRIES"), 3),
 
 		AWS:   loadAWSConfig(),
 		Azure: loadAzureConfig(),

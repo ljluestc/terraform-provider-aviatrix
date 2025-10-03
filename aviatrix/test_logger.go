@@ -214,12 +214,12 @@ func (l *TestLogger) GenerateTestReport() error {
 	duration := time.Since(l.startTime)
 
 	report := map[string]interface{}{
-		"test_name":     l.testName,
-		"start_time":    l.startTime.Format(time.RFC3339),
-		"end_time":      time.Now().Format(time.RFC3339),
-		"duration":      duration.String(),
-		"duration_ms":   duration.Milliseconds(),
-		"artifact_dir":  l.artifactDir,
+		"test_name":      l.testName,
+		"start_time":     l.startTime.Format(time.RFC3339),
+		"end_time":       time.Now().Format(time.RFC3339),
+		"duration":       duration.String(),
+		"duration_ms":    duration.Milliseconds(),
+		"artifact_dir":   l.artifactDir,
 		"final_metadata": l.metadata,
 	}
 
