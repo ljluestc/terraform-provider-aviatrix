@@ -177,18 +177,6 @@ func GetTestTimeout() time.Duration {
 // ImportStateIDFunc is a helper for generating import IDs
 type ImportStateIDFunc func(*terraform.State) (string, error)
 
-// ImportStateVerifyIgnoreFunc creates a function that ignores specified attributes during import verification
-func ImportStateVerifyIgnoreFunc(ignoreAttrs ...string) resource.ImportStateVerifyIgnoreFunc {
-	return func(key, value string) bool {
-		for _, attr := range ignoreAttrs {
-			if key == attr {
-				return true
-			}
-		}
-		return false
-	}
-}
-
 // LogTestProgress logs test progress to both stdout and artifact file
 func LogTestProgress(t *testing.T, message string, args ...interface{}) {
 	msg := fmt.Sprintf(message, args...)
