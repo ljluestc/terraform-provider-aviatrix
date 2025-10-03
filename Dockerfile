@@ -42,6 +42,11 @@ COPY . .
 RUN go install github.com/jstemmer/go-junit-report/v2@latest
 RUN go install github.com/axw/gocov/gocov@latest
 RUN go install github.com/AlekSi/gocov-xml@latest
+RUN go install github.com/matm/gocov-html@latest
+RUN go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest
+
+# Create test results directory
+RUN mkdir -p /app/test-results /app/test-artifacts /app/test-logs
 
 # Set default command for tests
 CMD ["go", "test", "-v", "./..."]
@@ -116,7 +121,16 @@ COPY . .
 RUN go install github.com/jstemmer/go-junit-report/v2@latest && \
     go install github.com/axw/gocov/gocov@latest && \
     go install github.com/AlekSi/gocov-xml@latest && \
-    go install github.com/matm/gocov-html@latest
+    go install github.com/matm/gocov-html@latest && \
+    go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest && \
+    go install gotest.tools/gotestsum@latest
+
+# Create test directory structure
+RUN mkdir -p /app/test-results /app/test-artifacts /app/test-logs
+
+# Copy test helper scripts
+COPY scripts/test-*.sh /usr/local/bin/ 2>/dev/null || true
+RUN chmod +x /usr/local/bin/test-*.sh 2>/dev/null || true
 
 # Default command for CI tests
 CMD ["make", "test"]
