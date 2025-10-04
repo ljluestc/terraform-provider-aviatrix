@@ -159,11 +159,6 @@ func TestArtifactDir() string {
 	return GetEnvOrDefault("TEST_ARTIFACT_DIR", "./test-results")
 }
 
-// IsAcceptanceTest returns true if running acceptance tests
-func IsAcceptanceTest() bool {
-	return os.Getenv("TF_ACC") != ""
-}
-
 // GetTestTimeout returns the configured test timeout
 func GetTestTimeout() time.Duration {
 	timeout := GetEnvOrDefault("GO_TEST_TIMEOUT", "30m")
@@ -269,4 +264,65 @@ func PreCheckOCI(t *testing.T) {
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
 		t.Fatalf("OCI private key file not found: %s", keyPath)
 	}
+}
+
+// PreCheckController checks Aviatrix Controller prerequisites
+func PreCheckController(t *testing.T) {
+	if os.Getenv("AVIATRIX_CONTROLLER_IP") == "" {
+		t.Fatal("AVIATRIX_CONTROLLER_IP must be set")
+	}
+	if os.Getenv("AVIATRIX_USERNAME") == "" {
+		t.Fatal("AVIATRIX_USERNAME must be set")
+	}
+	if os.Getenv("AVIATRIX_PASSWORD") == "" {
+		t.Fatal("AVIATRIX_PASSWORD must be set")
+	}
+}
+
+// IsAcceptanceTest returns true if running acceptance tests
+func IsAcceptanceTest() bool {
+	return os.Getenv("TF_ACC") == "1"
+}
+
+// RetryWithBackoff executes a function with exponential backoff retries
+func RetryWithBackoff(maxAttempts int, initialDelay time.Duration, fn func() error) error {
+	var lastErr error
+	delay := initialDelay
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
+		if attempt < maxAttempts-1 {
+			time.Sleep(delay)
+			delay *= 2 // Exponential backoff
+		}
+	}
+
+	return fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
+}
+
+// ValidateEnvConfig validates all required environment variables for testing
+func ValidateEnvConfig(t *testing.T) error {
+	required := []string{
+		"AVIATRIX_CONTROLLER_IP",
+		"AVIATRIX_USERNAME",
+		"AVIATRIX_PASSWORD",
+	}
+
+	var missing []string
+	for _, env := range required {
+		if os.Getenv(env) == "" {
+			missing = append(missing, env)
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("missing required environment variables: %v", missing)
+	}
+
+	return nil
 }

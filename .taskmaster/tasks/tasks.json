@@ -2,133 +2,133 @@
   "master": {
     "tasks": [
       {
-        "id": "11",
-        "title": "Setup Test Infrastructure Foundation",
-        "description": "Establish the foundational test infrastructure including Docker containerization, CI/CD pipeline configuration, and test framework setup",
-        "details": "Create Docker-based isolated test environments using multi-stage Dockerfiles. Setup GitHub Actions workflows with matrix testing for AWS, Azure, GCP, and OCI. Configure Terraform Plugin SDK v2 testing framework with Go 1.23+. Create base test utilities and helpers. Implement environment variable management for cloud provider credentials. Setup test artifact storage and logging infrastructure.",
-        "testStrategy": "Validate Docker container builds successfully, verify CI/CD pipeline triggers on PR/merge events, confirm test framework initialization, and validate environment credential handling through smoke tests.",
+        "id": "21",
+        "title": "Implement Resource Unit Test Framework and Templates",
+        "description": "Create comprehensive unit testing framework with templates for all Terraform resource CRUD operations, schema validation, and error handling",
+        "details": "Implement test templates for resource CRUD operations including Create, Read, Update, Delete, and Import functionality. Create schema validation tests for all required/optional fields, input validation tests, error handling tests, state management tests, and resource dependency tests. Framework must support testing computed fields, default values, and edge cases. Use Go testing package with Terraform Plugin SDK v2, testify/assert for assertions, and follow established patterns. Include helper functions for random resource name generation, test environment setup, and cleanup automation.",
+        "testStrategy": "Validate framework with smoke tests on 5 sample resources, verify all CRUD operations work correctly, ensure schema validation catches invalid inputs, test error scenarios return appropriate messages, and confirm template generates passing tests for existing resources",
         "priority": "high",
         "dependencies": [],
         "status": "in-progress",
         "subtasks": [],
-        "updatedAt": "2025-09-29T00:07:17.390Z"
+        "updatedAt": "2025-10-04T17:25:49.715Z"
       },
       {
-        "id": "12",
-        "title": "Implement Cloud Environment Provisioning",
-        "description": "Create Terraform modules for automated test environment provisioning across all supported cloud providers",
-        "details": "Develop Terraform modules for AWS, Azure, GCP, and OCI test environments. Create Terragrunt configurations for environment management. Implement automated resource cleanup mechanisms with proper tagging. Setup isolated VPCs/VNets for each test execution. Create service account and IAM role templates. Implement state management isolation using unique state keys per test run.",
-        "testStrategy": "Verify successful environment provisioning for each cloud provider, validate resource cleanup completion, test state isolation between parallel executions, and confirm proper IAM permissions setup.",
+        "id": "22",
+        "title": "Implement Priority 1 Core Infrastructure Resource Tests",
+        "description": "Create comprehensive unit and integration tests for 40 Priority 1 core infrastructure resources including accounts, gateways, and network resources",
+        "details": "Implement 100% test coverage for P1 resources: Account Management (aviatrix_account, aviatrix_account_user, aviatrix_access_account), Gateway Resources (aviatrix_gateway, aviatrix_transit_gateway, aviatrix_spoke_gateway, aviatrix_edge_spoke, aviatrix_edge_csp, aviatrix_edge_zededa, aviatrix_edge_vm_selfmanaged), Network Resources (aviatrix_vpc, aviatrix_transit_vpc, aviatrix_spoke_vpc, aviatrix_aws_tgw, aviatrix_azure_vnet, aviatrix_gcp_network), and Connectivity (aviatrix_transit_gateway_peering, aviatrix_spoke_transit_attachment, aviatrix_aws_tgw_vpc_attachment, aviatrix_site2cloud, aviatrix_tunnel). Each resource must have comprehensive CRUD tests, import tests, schema validation, and error handling.",
+        "testStrategy": "Execute unit tests achieving >=95% statement coverage for each resource, run integration tests on all 4 cloud providers (AWS, Azure, GCP, OCI), validate resource lifecycle (create → read → update → delete), test import functionality with valid/invalid IDs, and ensure cleanup automation prevents resource leaks",
         "priority": "high",
         "dependencies": [
-          "11"
+          "21"
         ],
         "status": "pending",
         "subtasks": []
       },
       {
-        "id": "13",
-        "title": "Develop Test Data Management Framework",
-        "description": "Create comprehensive test data generation, fixture management, and secrets handling system",
-        "details": "Implement synthetic data generators for Terraform configurations. Create reusable test fixtures for common scenarios. Setup secure secrets management using GitHub Secrets and environment-specific configurations. Develop configuration templates for each resource type. Create data validation utilities and test data cleanup mechanisms. Implement test data versioning and rollback capabilities.",
-        "testStrategy": "Validate data generator outputs against schema requirements, test secrets retrieval and injection, verify fixture reusability across different test scenarios, and confirm proper data cleanup after test completion.",
-        "priority": "medium",
-        "dependencies": [
-          "11"
-        ],
-        "status": "pending",
-        "subtasks": []
-      },
-      {
-        "id": "14",
-        "title": "Create Resource Integration Test Framework",
-        "description": "Implement comprehensive CRUD lifecycle testing framework for all 282 Terraform resources",
-        "details": "Develop standardized test patterns for Create, Read, Update, Delete operations using resource.TestCase. Implement dependency testing framework for resource relationships. Create error handling and negative test cases. Setup Terraform import functionality validation. Implement state drift detection and correction tests. Create resource-specific test generators with proper assertions and validation logic.",
-        "testStrategy": "Execute CRUD tests for sample resources across each category (account, gateways, networking, security), validate error handling through deliberate failure injection, test import functionality with existing resources, and verify state consistency after operations.",
+        "id": "23",
+        "title": "Implement Multi-Cloud Integration Test Framework",
+        "description": "Build integration testing framework supporting AWS, Azure, GCP, and OCI with resource lifecycle testing, cross-resource dependencies, and automated cleanup",
+        "details": "Create integration test framework that validates real cloud provider API interactions across all 4 supported clouds. Implement resource lifecycle testing (create → read → update → delete), cross-resource dependency testing, state consistency validation, and test isolation mechanisms. Framework must support parallel test execution, automated cleanup, and proper error handling. Use Docker Compose for orchestration, separate networks per cloud provider, and environment-specific configurations. Include pre-check functions for each cloud provider and comprehensive credential validation.",
+        "testStrategy": "Validate framework works on all 4 cloud providers, execute parallel tests without conflicts, verify automated cleanup removes all created resources, test isolation prevents cross-test interference, and ensure execution time <60 minutes for full suite",
         "priority": "high",
         "dependencies": [
-          "12",
-          "13"
+          "21"
         ],
         "status": "pending",
         "subtasks": []
       },
       {
-        "id": "15",
-        "title": "Implement Data Source Integration Tests",
-        "description": "Create comprehensive testing framework for all 46 data sources with query validation and performance testing",
-        "details": "Develop data source query testing using Terraform data blocks. Implement filter and parameter validation tests. Create dependency tests with existing resources. Setup performance benchmarking for query response times. Implement error handling for invalid queries and missing resources. Create data consistency validation between data sources and corresponding resources.",
-        "testStrategy": "Validate data retrieval accuracy by comparing with known resource states, test query performance against defined SLA thresholds, verify error handling for non-existent resources, and confirm data consistency across related data sources.",
-        "priority": "medium",
-        "dependencies": [
-          "12",
-          "13"
-        ],
-        "status": "pending",
-        "subtasks": []
-      },
-      {
-        "id": "16",
-        "title": "Develop Cross-Resource Testing Framework",
-        "description": "Implement testing for complex multi-resource dependencies and resource relationship validation",
-        "details": "Create dependency chain testing for multi-resource configurations. Implement complex scenario testing with resource relationships. Setup state consistency validation across dependent resources. Create configuration validation for large multi-resource deployments. Implement cascading delete and update testing. Setup resource ordering and timing validation tests.",
-        "testStrategy": "Execute complex dependency scenarios with gateway-to-network relationships, validate state consistency after cascading operations, test configuration validation with intentional conflicts, and verify proper resource ordering during parallel operations.",
-        "priority": "medium",
-        "dependencies": [
-          "14",
-          "15"
-        ],
-        "status": "pending",
-        "subtasks": []
-      },
-      {
-        "id": "17",
-        "title": "Create End-to-End Workflow Testing",
-        "description": "Implement comprehensive E2E testing for real-world Aviatrix network deployment scenarios",
-        "details": "Develop complete network topology deployment tests including multi-cloud connectivity scenarios. Create enterprise-scale deployment simulations with proper gateway lifecycle testing. Implement security and routing policy application tests. Setup disaster recovery and backup scenario validation. Create hybrid cloud connectivity testing with on-premises simulation. Implement migration testing for provider version upgrades.",
-        "testStrategy": "Execute full network deployment scenarios across multiple cloud providers, validate connectivity between gateways, test policy enforcement through traffic simulation, verify disaster recovery procedures, and confirm successful migration paths between provider versions.",
+        "id": "24",
+        "title": "Implement Data Source Testing Framework and Coverage",
+        "description": "Create comprehensive testing framework for all 23 data sources with read operations, query parameters, filtering, and error handling",
+        "details": "Implement test templates and comprehensive coverage for all 23 data sources including Account & Identity (aviatrix_account, aviatrix_caller_identity), Gateway Data Sources (aviatrix_gateway, aviatrix_transit_gateway, aviatrix_spoke_gateway, aviatrix_transit_gateways, aviatrix_spoke_gateways), Network Data Sources (aviatrix_vpc, aviatrix_vpc_tracker, aviatrix_network_domains), Firewall Data Sources (aviatrix_firenet, aviatrix_firewall, aviatrix_firewall_instance_images, aviatrix_firenet_vendor_integration), and Smart Groups & DCF (aviatrix_smart_groups, aviatrix_dcf_webgroups, aviatrix_dcf_mwp_attachment_points). Test read operations, filter/query parameters, non-existent resource handling, multiple result handling, and schema validation.",
+        "testStrategy": "Achieve >=90% test coverage for all data source files, validate query parameters work correctly, test error cases for non-existent resources, verify multiple result handling, and ensure schema validation catches invalid configurations",
         "priority": "high",
         "dependencies": [
-          "16"
+          "21"
         ],
         "status": "pending",
         "subtasks": []
       },
       {
-        "id": "18",
-        "title": "Implement Performance and Load Testing",
-        "description": "Create comprehensive performance testing framework with load testing, concurrent operations, and resource scaling validation",
-        "details": "Develop load testing for high-volume resource creation and deletion. Implement concurrent operation testing with parallel resource management. Create API rate limiting tests for Aviatrix Controller. Setup resource scaling performance tests for large deployments. Implement memory and CPU profiling for provider performance analysis. Create performance regression detection and alerting.",
-        "testStrategy": "Execute load tests with configurable resource volumes, measure concurrent operation performance against baseline metrics, validate API rate limit handling, profile memory usage during large deployments, and establish performance regression thresholds.",
+        "id": "25",
+        "title": "Implement Priority 2 Advanced Feature Resource Tests",
+        "description": "Create comprehensive tests for 50 Priority 2 advanced feature resources including FireNet, Distributed Firewalling, Security, and VPN components",
+        "details": "Implement 90% test coverage for P2 resources: FireNet (aviatrix_firenet, aviatrix_firewall_instance, aviatrix_firewall_instance_association, aviatrix_firewall_management_access, aviatrix_centralized_transit_firenet), Distributed Firewalling (aviatrix_distributed_firewalling_config, aviatrix_distributed_firewalling_policy_list, aviatrix_distributed_firewalling_intra_vpc), Security (aviatrix_fqdn, aviatrix_fqdn_tag_rule, aviatrix_firewall_policy, aviatrix_segmentation_security_domain), and VPN (aviatrix_geo_vpn, aviatrix_remote_syslog, aviatrix_vpn_user, aviatrix_vpn_profile). Focus on complex configuration scenarios and advanced feature interactions.",
+        "testStrategy": "Execute comprehensive test suites achieving >=90% coverage, validate complex configuration scenarios, test advanced feature interactions, ensure proper error handling for invalid configurations, and verify integration with core infrastructure resources",
         "priority": "medium",
         "dependencies": [
-          "17"
+          "22",
+          "23"
         ],
         "status": "pending",
         "subtasks": []
       },
       {
-        "id": "19",
-        "title": "Setup Test Execution and Reporting Pipeline",
-        "description": "Create comprehensive test execution framework with parallel execution, smart test selection, and detailed reporting",
-        "details": "Implement test execution modes including full suite, incremental, smoke tests, and regression suites. Create smart test selection based on changed files using Git diff analysis. Setup parallel execution with configurable parallelism levels. Implement comprehensive test reporting with coverage metrics and failure diagnostics. Create test execution monitoring with duration and success rate tracking. Setup automated test result notifications and alerts.",
-        "testStrategy": "Validate test selection accuracy by comparing results with manual analysis, verify parallel execution efficiency and resource isolation, test reporting completeness with intentional failures, and confirm monitoring accuracy through metric validation.",
+        "id": "26",
+        "title": "Implement Priority 3 Supporting Feature Resource Tests",
+        "description": "Create tests for 43 Priority 3 supporting feature resources including Controller Configuration, Advanced Networking, and Monitoring components",
+        "details": "Implement 80% test coverage for P3 resources: Controller Configuration (aviatrix_controller_config, aviatrix_controller_email_config, aviatrix_controller_cert_domain_config, aviatrix_controller_bgp_max_as_limit_config), Advanced Networking (aviatrix_aws_tgw_connect, aviatrix_aws_tgw_connect_peer, aviatrix_aws_tgw_directconnect, aviatrix_azure_vng_conn, aviatrix_azure_spoke_native_peering), and Monitoring & Operations (aviatrix_cloudwatch_agent, aviatrix_datadog_agent, aviatrix_copilot_association, aviatrix_splunk_logging). Focus on configuration management and operational features.",
+        "testStrategy": "Achieve >=80% test coverage for supporting resources, validate configuration management scenarios, test operational feature functionality, ensure proper integration with monitoring systems, and verify administrative configuration changes",
         "priority": "medium",
         "dependencies": [
-          "18"
+          "25"
         ],
         "status": "pending",
         "subtasks": []
       },
       {
-        "id": "20",
-        "title": "Implement Monitoring, Documentation and Maintenance Framework",
-        "description": "Create comprehensive monitoring dashboard, documentation, and maintenance procedures for the testing framework",
-        "details": "Develop test execution monitoring dashboard with metrics visualization. Create comprehensive documentation including API references, testing guides, and troubleshooting runbooks. Implement automated maintenance procedures for test environment refresh and dependency updates. Setup alerting for test failures and performance degradation. Create training materials and onboarding guides. Implement test framework version management and upgrade procedures.",
-        "testStrategy": "Validate monitoring dashboard accuracy through metric cross-verification, test documentation completeness through team walkthrough sessions, verify maintenance automation through scheduled execution, confirm alerting functionality through deliberate trigger events, and validate training effectiveness through team feedback.",
+        "id": "27",
+        "title": "Implement Advanced Acceptance Test Scenarios",
+        "description": "Create complex multi-resource workflow tests, state migration tests, version upgrade tests, and configuration drift detection",
+        "details": "Implement advanced acceptance testing capabilities including complex scenario testing with multi-resource workflows, state migration testing between provider versions, version upgrade path validation, configuration drift detection, Terraform plan validation, and apply/destroy idempotency testing. Create test scenarios that mirror real-world usage patterns and validate provider behavior across version upgrades. Include comprehensive state consistency checks and drift remediation testing.",
+        "testStrategy": "Execute complex multi-resource scenarios successfully, validate state migration across provider versions, verify upgrade paths maintain compatibility, test drift detection accurately identifies changes, and confirm idempotency for apply/destroy operations",
         "priority": "medium",
         "dependencies": [
-          "19"
+          "24",
+          "25"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "28",
+        "title": "Implement Performance and Security Testing Suite",
+        "description": "Create benchmark tests, performance baselines, load testing, and comprehensive security validation for the provider",
+        "details": "Implement performance testing with benchmark tests for critical operations, resource creation performance baselines, API rate limiting tests, concurrent resource creation tests, and large-scale deployment testing. Create security testing suite with credential handling validation, sensitive data masking tests, TLS/SSL validation, API authentication testing, authorization boundary testing, and security regression tests. Include performance regression detection and security scan integration with Gosec and GitHub Code Scanning.",
+        "testStrategy": "Establish performance baselines for critical operations, validate rate limiting handles concurrent requests properly, test large-scale deployments successfully, ensure credential handling is secure, verify sensitive data masking works correctly, and confirm security scans detect vulnerabilities",
+        "priority": "medium",
+        "dependencies": [
+          "26"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "29",
+        "title": "Implement Test Coverage Monitoring and Quality Gates",
+        "description": "Create comprehensive test coverage monitoring, quality gates for CI/CD pipeline, and flaky test detection systems",
+        "details": "Implement test coverage monitoring with daily coverage reports, per-PR coverage diff analysis, coverage badges for README, historical coverage trends, and uncovered code analysis. Create quality gates including merge requirements (all tests pass, coverage doesn't decrease, no critical security issues), release requirements (100% P0 resource coverage, >=90% overall coverage), and flaky test detection with quarantine system. Integrate with GitHub Actions for automated enforcement and reporting.",
+        "testStrategy": "Validate coverage reports generate correctly, verify quality gates block merges when requirements not met, test flaky test detection identifies intermittent failures, ensure coverage trends track properly over time, and confirm badge generation reflects current coverage",
+        "priority": "high",
+        "dependencies": [
+          "27",
+          "28"
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": "30",
+        "title": "Create Comprehensive Test Documentation and Maintenance Framework",
+        "description": "Develop complete test documentation, best practices guides, troubleshooting documentation, and continuous improvement processes",
+        "details": "Create comprehensive documentation including test writing guidelines, test template documentation with examples, best practices guide for provider testing, troubleshooting guide for common issues, CI/CD usage documentation, and test coverage reporting guide. Implement continuous improvement framework with test data management, fixture organization, cleanup automation, shared test data repository, and data versioning for compatibility tests. Include test debt tracking, regular review cycles, and performance trend analysis.",
+        "testStrategy": "Validate documentation covers all testing scenarios, verify troubleshooting guides resolve common issues, test data management system works correctly, ensure fixture organization supports maintainability, and confirm continuous improvement processes identify and address technical debt",
+        "priority": "medium",
+        "dependencies": [
+          "29"
         ],
         "status": "pending",
         "subtasks": []
@@ -136,7 +136,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2025-09-29T00:07:17.391Z",
+      "lastModified": "2025-10-04T17:25:49.716Z",
       "taskCount": 10,
       "completedCount": 0,
       "tags": [
