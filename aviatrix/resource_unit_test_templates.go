@@ -39,6 +39,11 @@ type CreateTestConfig struct {
 // TestCreate tests the resource Create operation
 func (tt *CRUDTestTemplate) TestCreate(config CreateTestConfig) {
 	tt.t.Run(config.TestName, func(t *testing.T) {
+		if tt.Resource.CreateContext == nil {
+			t.Skip("Resource does not implement CreateContext")
+			return
+		}
+
 		// Setup mock client
 		mockClient := &goaviatrix.ClientInterfaceMock{}
 		if config.SetupMock != nil {
@@ -80,6 +85,11 @@ type ReadTestConfig struct {
 // TestRead tests the resource Read operation
 func (tt *CRUDTestTemplate) TestRead(config ReadTestConfig) {
 	tt.t.Run(config.TestName, func(t *testing.T) {
+		if tt.Resource.ReadContext == nil {
+			t.Skip("Resource does not implement ReadContext")
+			return
+		}
+
 		// Setup mock client
 		mockClient := &goaviatrix.ClientInterfaceMock{}
 		if config.SetupMock != nil {
@@ -125,6 +135,11 @@ type UpdateTestConfig struct {
 // TestUpdate tests the resource Update operation
 func (tt *CRUDTestTemplate) TestUpdate(config UpdateTestConfig) {
 	tt.t.Run(config.TestName, func(t *testing.T) {
+		if tt.Resource.UpdateContext == nil {
+			t.Skip("Resource does not implement UpdateContext")
+			return
+		}
+
 		// Setup mock client
 		mockClient := &goaviatrix.ClientInterfaceMock{}
 		if config.SetupMock != nil {
@@ -171,6 +186,11 @@ type DeleteTestConfig struct {
 // TestDelete tests the resource Delete operation
 func (tt *CRUDTestTemplate) TestDelete(config DeleteTestConfig) {
 	tt.t.Run(config.TestName, func(t *testing.T) {
+		if tt.Resource.DeleteContext == nil {
+			t.Skip("Resource does not implement DeleteContext")
+			return
+		}
+
 		// Setup mock client
 		mockClient := &goaviatrix.ClientInterfaceMock{}
 		if config.SetupMock != nil {

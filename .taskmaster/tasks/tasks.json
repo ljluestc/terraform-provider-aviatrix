@@ -10,8 +10,106 @@
         "priority": "high",
         "dependencies": [],
         "status": "in-progress",
-        "subtasks": [],
-        "updatedAt": "2025-10-04T22:26:15.222Z"
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Create Core Unit Test Framework Structure",
+            "description": "Establish the foundational structure for the unit testing framework including base test files, utility functions, and mock provider setup",
+            "dependencies": [],
+            "details": "Create unit_test_framework.go file with core testing utilities. Implement mock provider interface using Terraform Plugin SDK v2 testing capabilities. Set up base test structures for resource testing without live infrastructure. Create helper functions for test setup, teardown, and common assertions. Leverage existing test_helpers.go components for consistent testing patterns.",
+            "status": "in-progress",
+            "testStrategy": "Unit tests for framework initialization, mock provider setup validation, helper function correctness tests",
+            "updatedAt": "2025-10-04T22:50:55.550Z",
+            "parentId": "undefined"
+          },
+          {
+            "id": 2,
+            "title": "Implement Resource Schema Validation Testing",
+            "description": "Create comprehensive schema validation tests to verify Terraform resource schema definitions are correct and complete",
+            "dependencies": [
+              "31.1"
+            ],
+            "details": "Build schema validation test utilities that can examine resource schema definitions for completeness, type correctness, and required field validation. Create test templates that can be applied to any resource schema. Implement automated schema compliance checking against Terraform Plugin SDK v2 standards. Include validation for computed fields, optional fields, and schema versioning.",
+            "status": "pending",
+            "testStrategy": "Schema completeness tests, type validation tests, required field verification, computed field testing",
+            "parentId": "undefined"
+          },
+          {
+            "id": 3,
+            "title": "Build Configuration Parameter Validation System",
+            "description": "Develop testing utilities for validating resource configuration parameters and their interactions",
+            "dependencies": [
+              "31.2"
+            ],
+            "details": "Create configuration validation test framework that can parse and validate Terraform configuration blocks. Implement parameter type checking, range validation, and cross-parameter dependency validation. Build test utilities for validating configuration parsing and transformation. Include support for nested configuration blocks and complex data types.",
+            "status": "pending",
+            "testStrategy": "Parameter type validation tests, range checking tests, configuration parsing validation, nested block testing",
+            "parentId": "undefined"
+          },
+          {
+            "id": 4,
+            "title": "Implement State Management Testing Framework",
+            "description": "Create testing utilities for validating Terraform state operations including read, create, update, and delete without live infrastructure",
+            "dependencies": [
+              "31.3"
+            ],
+            "details": "Build state management test framework using mock providers to simulate state operations. Implement test utilities for validating state transitions, state persistence, and state diff calculations. Create helpers for testing resource lifecycle operations (CRUD) with mocked backend responses. Include state validation utilities that can verify state consistency and correctness.",
+            "status": "pending",
+            "testStrategy": "State transition tests, CRUD operation validation, state consistency checks, mock backend response testing",
+            "parentId": "undefined"
+          },
+          {
+            "id": 5,
+            "title": "Create Error Handling and Edge Case Testing Suite",
+            "description": "Develop comprehensive error handling tests and edge case validation for robust resource behavior testing",
+            "dependencies": [
+              "31.4"
+            ],
+            "details": "Implement error handling test framework that can simulate various failure scenarios and validate error responses. Create test utilities for edge cases like network timeouts, invalid API responses, and malformed configurations. Build test helpers for validating error messages, error codes, and recovery mechanisms. Include boundary condition testing and exception handling validation.",
+            "status": "pending",
+            "testStrategy": "Error response validation tests, edge case scenario testing, timeout handling tests, recovery mechanism validation",
+            "parentId": "undefined"
+          },
+          {
+            "id": 6,
+            "title": "Build Test Template Generation System",
+            "description": "Create automated test template generation for consistent and comprehensive testing across all resources",
+            "dependencies": [
+              "31.1",
+              "31.2"
+            ],
+            "details": "Develop template generation system that can automatically create unit test boilerplate for any resource based on its schema definition. Implement template generators for schema validation tests, configuration parameter tests, and state management tests. Create reusable test patterns that can be applied across different resource types. Include customization capabilities for resource-specific testing requirements.",
+            "status": "pending",
+            "testStrategy": "Template generation accuracy tests, boilerplate correctness validation, pattern reusability tests, customization functionality testing",
+            "parentId": "undefined"
+          },
+          {
+            "id": 7,
+            "title": "Integrate with Existing Test Infrastructure",
+            "description": "Seamlessly integrate the unit test framework with existing test infrastructure and CI/CD pipelines",
+            "dependencies": [
+              "31.5",
+              "31.6"
+            ],
+            "details": "Integrate unit test framework with existing test_framework.go and test_helpers.go components. Ensure compatibility with current CI/CD pipeline and GitHub Actions workflows. Implement test discovery and execution integration with existing test runners. Create configuration management for unit test execution alongside integration tests. Include test result reporting integration with existing logging infrastructure.",
+            "status": "pending",
+            "testStrategy": "Integration compatibility tests, CI/CD pipeline validation, test discovery verification, configuration management testing",
+            "parentId": "undefined"
+          },
+          {
+            "id": 8,
+            "title": "Create Documentation and Usage Examples",
+            "description": "Develop comprehensive documentation and practical examples for using the unit test framework effectively",
+            "dependencies": [
+              "31.7"
+            ],
+            "details": "Create detailed documentation covering framework usage, test template creation, and best practices for unit testing Terraform resources. Develop practical examples showing how to test different types of resources and scenarios. Include troubleshooting guides, FAQ section, and migration guides for existing tests. Create developer guides for extending the framework with custom test utilities.",
+            "status": "pending",
+            "testStrategy": "Documentation accuracy validation, example code testing, usage guide verification, developer experience testing",
+            "parentId": "undefined"
+          }
+        ],
+        "updatedAt": "2025-10-04T22:50:55.550Z"
       },
       {
         "id": "32",
@@ -134,7 +232,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2025-10-04T22:26:15.222Z",
+      "lastModified": "2025-10-04T22:50:55.550Z",
       "taskCount": 10,
       "completedCount": 0,
       "tags": [
