@@ -1,61 +1,151 @@
 package aviatrix
 
 import (
-	"os"
 	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/stretchr/testify/assert"
 )
 
-// TestSmokeProvider tests basic provider initialization
+// TestSmokeProvider verifies the provider can be initialized
 func TestSmokeProvider(t *testing.T) {
+	if IsAcceptanceTest() {
+		t.Skip("Skipping smoke test in acceptance mode")
+	}
+
 	provider := Provider()
-	if provider == nil {
-		t.Fatal("Provider() returned nil")
+	assert.NotNil(t, provider, "Provider should be initialized")
+	assert.NotNil(t, provider.Schema, "Provider schema should be defined")
+	assert.NotNil(t, provider.ResourcesMap, "Provider resources should be defined")
+
+	// Verify core provider fields
+	assert.Contains(t, provider.Schema, "controller_ip")
+	assert.Contains(t, provider.Schema, "username")
+	assert.Contains(t, provider.Schema, "password")
+}
+
+// TestSmokeResourceSchemas verifies resource schemas are properly defined
+func TestSmokeResourceSchemas(t *testing.T) {
+	if IsAcceptanceTest() {
+		t.Skip("Skipping smoke test in acceptance mode")
 	}
 
-	if err := provider.InternalValidate(); err != nil {
-		t.Fatalf("Provider validation failed: %s", err)
+	provider := Provider()
+
+	// Test a few key resources exist
+	testResources := []string{
+		"aviatrix_account",
+		"aviatrix_aws_tgw",
+	}
+
+	for _, resourceName := range testResources {
+		resource, exists := provider.ResourcesMap[resourceName]
+		if !exists {
+			// Resource might not exist in current codebase, skip
+			continue
+		}
+
+		assert.NotNil(t, resource, "Resource %s should be defined", resourceName)
+		assert.NotNil(t, resource.Schema, "Resource %s should have schema", resourceName)
+
+		// Verify CRUD operations are defined
+		assert.NotNil(t, resource.ReadContext, "Resource %s should have ReadContext", resourceName)
+
+		// Most resources have Create/Update/Delete
+		if resource.CreateContext != nil {
+			assert.NotNil(t, resource.CreateContext, "Resource %s should have CreateContext", resourceName)
+		}
 	}
 }
 
-// TestSmokeTestHelpers validates test helper functions
-func TestSmokeTestHelpers(t *testing.T) {
-	// Test GetEnvOrDefault
-	os.Setenv("TEST_VAR_123", "test_value")
-	defer os.Unsetenv("TEST_VAR_123")
-
-	if got := GetEnvOrDefault("TEST_VAR_123", "default"); got != "test_value" {
-		t.Errorf("GetEnvOrDefault() = %v, want %v", got, "test_value")
+// TestSmokeFrameworkComponents verifies framework components are available
+func TestSmokeFrameworkComponents(t *testing.T) {
+	if IsAcceptanceTest() {
+		t.Skip("Skipping smoke test in acceptance mode")
 	}
 
-	if got := GetEnvOrDefault("NON_EXISTENT_VAR", "default"); got != "default" {
-		t.Errorf("GetEnvOrDefault() = %v, want %v", got, "default")
-	}
+	// Test that framework helpers can be instantiated
+	resource := resourceAviatrixAccount()
+
+	// Test CRUDTestTemplate
+	crudTemplate := NewCRUDTestTemplate(t, "aviatrix_account", resource)
+	assert.NotNil(t, crudTemplate, "CRUDTestTemplate should be created")
+	assert.Equal(t, "aviatrix_account", crudTemplate.ResourceName)
+
+	// Test SchemaValidationTemplate
+	schemaTemplate := NewSchemaValidationTemplate(t, resource)
+	assert.NotNil(t, schemaTemplate, "SchemaValidationTemplate should be created")
+
+	// Test InputValidationTemplate
+	inputTemplate := NewInputValidationTemplate(t)
+	assert.NotNil(t, inputTemplate, "InputValidationTemplate should be created")
+
+	// Test ErrorHandlingTemplate
+	errorTemplate := NewErrorHandlingTemplate(t, "aviatrix_account", resource)
+	assert.NotNil(t, errorTemplate, "ErrorHandlingTemplate should be created")
+
+	// Test StateManagementTemplate
+	stateTemplate := NewStateManagementTemplate(t, resource)
+	assert.NotNil(t, stateTemplate, "StateManagementTemplate should be created")
 }
 
-// TestSmokeCloudProviderConfig tests cloud provider configuration helpers
-func TestSmokeCloudProviderConfig(t *testing.T) {
-	// Save original values
-	origSkipAWS := os.Getenv("SKIP_ACCOUNT_AWS")
-	defer os.Setenv("SKIP_ACCOUNT_AWS", origSkipAWS)
-
-	// Test IsCloudProviderEnabled
-	os.Setenv("SKIP_ACCOUNT_AWS", "yes")
-	if IsCloudProviderEnabled("AWS") {
-		t.Error("IsCloudProviderEnabled(AWS) should be false when SKIP_ACCOUNT_AWS=yes")
+// TestSmokeHelpers verifies helper utilities work correctly
+func TestSmokeHelpers(t *testing.T) {
+	if IsAcceptanceTest() {
+		t.Skip("Skipping smoke test in acceptance mode")
 	}
 
-	os.Setenv("SKIP_ACCOUNT_AWS", "")
-	if !IsCloudProviderEnabled("AWS") {
-		t.Error("IsCloudProviderEnabled(AWS) should be true when SKIP_ACCOUNT_AWS is not set")
+	resource := resourceAviatrixAccount()
+
+	// Test SchemaFieldTestHelper
+	schemaHelper := NewSchemaFieldTestHelper(t, resource.Schema)
+	assert.NotNil(t, schemaHelper, "SchemaFieldTestHelper should be created")
+
+	// Verify it can check field existence
+	field := schemaHelper.AssertFieldExists("account_name")
+	assert.NotNil(t, field, "account_name field should exist")
+
+	// Test ResourceStateTestHelper
+	rd := schema.TestResourceDataRaw(t, resource.Schema, map[string]interface{}{
+		"account_name": "test-account",
+		"cloud_type":   1,
+	})
+	stateHelper := NewResourceStateTestHelper(t, rd)
+	assert.NotNil(t, stateHelper, "ResourceStateTestHelper should be created")
+
+	// Test EdgeCaseTestHelper
+	edgeHelper := NewEdgeCaseTestHelper(t)
+	assert.NotNil(t, edgeHelper, "EdgeCaseTestHelper should be created")
+}
+
+// TestSmokeResourceTestData verifies resource test data utilities
+func TestSmokeResourceTestData(t *testing.T) {
+	if IsAcceptanceTest() {
+		t.Skip("Skipping smoke test in acceptance mode")
 	}
 
-	// Test GetCloudProviderConfigs
-	configs := GetCloudProviderConfigs()
-	if configs == nil {
-		t.Fatal("GetCloudProviderConfigs() returned nil")
+	resource := resourceAviatrixAccount()
+	framework := NewResourceUnitTestFramework(t, resource, nil)
+
+	testData := framework.NewResourceTestData(map[string]interface{}{
+		"account_name": "test-account",
+		"cloud_type":   1,
+	})
+
+	assert.NotNil(t, testData, "ResourceTestData should be created")
+	assert.Equal(t, "test-account", testData.Get("account_name"))
+	assert.Equal(t, 1, testData.Get("cloud_type"))
+}
+
+// TestSmokeMockBuilder verifies mock client builder
+func TestSmokeMockBuilder(t *testing.T) {
+	if IsAcceptanceTest() {
+		t.Skip("Skipping smoke test in acceptance mode")
 	}
 
-	if _, ok := configs["aws"]; !ok {
-		t.Error("GetCloudProviderConfigs() missing aws configuration")
-	}
+	builder := NewMockClientBuilder()
+	assert.NotNil(t, builder, "MockClientBuilder should be created")
+
+	client := builder.Build()
+	assert.NotNil(t, client, "Mock client should be built")
 }

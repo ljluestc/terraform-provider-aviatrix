@@ -87,21 +87,9 @@ func (b *MockClientBuilder) WithGetAccountFunc(fn func(*goaviatrix.Account) (goa
 	return b
 }
 
-// WithCreateAccountFunc configures the CreateAccount mock function
-func (b *MockClientBuilder) WithCreateAccountFunc(fn func(*goaviatrix.Account) error) *MockClientBuilder {
-	b.mock.CreateAccountFunc = fn
-	return b
-}
-
 // WithDeleteAccountFunc configures the DeleteAccount mock function
 func (b *MockClientBuilder) WithDeleteAccountFunc(fn func(*goaviatrix.Account) error) *MockClientBuilder {
 	b.mock.DeleteAccountFunc = fn
-	return b
-}
-
-// WithUpdateAccountFunc configures the UpdateAccount mock function
-func (b *MockClientBuilder) WithUpdateAccountFunc(fn func(*goaviatrix.Account) error) *MockClientBuilder {
-	b.mock.UpdateAccountFunc = fn
 	return b
 }
 

@@ -1,0 +1,434 @@
+# Unit Test Framework Expansion and Integration PRD
+
+## Project Overview
+Expand the newly implemented unit test framework to cover all major Terraform provider resources, integrate with CI/CD pipelines, and establish comprehensive testing standards for the terraform-provider-aviatrix project.
+
+## Background
+A comprehensive unit test framework has been successfully implemented with templates for CRUD operations, schema validation, input validation, error handling, and state management. The framework is validated and working with smoke tests on the Account resource. The next phase involves expanding coverage to all resources and integrating with development workflows.
+
+## Goals and Objectives
+
+### Primary Goals
+1. Achieve 80%+ unit test coverage across all Terraform resources
+2. Integrate unit tests into CI/CD pipeline with automated reporting
+3. Establish unit testing as standard practice for all new resource development
+4. Create resource-specific test suites for top 20 most-used resources
+5. Document testing standards and provide developer training materials
+
+### Success Metrics
+- All existing resources have basic unit test coverage (schema + validation)
+- CI/CD pipeline runs unit tests in < 2 minutes
+- Code coverage reports generated automatically on every PR
+- Zero regression in schema validation across releases
+- 100% of new resources include comprehensive unit tests before merge
+
+## Functional Requirements
+
+### FR-1: Resource Coverage Expansion
+**Priority: High**
+
+Implement comprehensive unit test suites for all major resource types:
+
+#### FR-1.1: Core Network Resources
+- aviatrix_gateway (spoke, transit, gateway types)
+- aviatrix_vpc
+- aviatrix_transit_gateway
+- aviatrix_spoke_gateway
+- aviatrix_site2cloud
+
+Test coverage must include:
+- All CRUD operations
+- Schema validation for all fields
+- Input validation for all custom validators
+- Error handling for API failures
+- State management and updates
+- Edge cases specific to each resource
+
+#### FR-1.2: Security Resources
+- aviatrix_firewall
+- aviatrix_firewall_instance
+- aviatrix_fqdn
+- aviatrix_segmentation_security_domain
+- aviatrix_distributed_firewalling_policy_list
+
+Test coverage requirements:
+- Policy rule validation
+- Security configuration testing
+- Multi-cloud compatibility validation
+- Default value behavior testing
+
+#### FR-1.3: Account and Authentication Resources
+- aviatrix_account (expand existing tests)
+- aviatrix_rbac_group
+- aviatrix_rbac_group_permission_attachment
+- aviatrix_account_user
+
+Test coverage requirements:
+- Permission validation
+- Role-based access control testing
+- Credential handling (mock only, no real credentials)
+- Multi-account scenarios
+
+#### FR-1.4: Advanced Features Resources
+- aviatrix_aws_tgw
+- aviatrix_azure_peer
+- aviatrix_copilot_simple_deployment
+- aviatrix_controller_config
+- aviatrix_edge_spoke
+
+Test coverage requirements:
+- Cloud provider-specific validations
+- Complex attribute combinations
+- Dependency handling
+- Computed field behavior
+
+### FR-2: Mock Client Enhancement
+**Priority: High**
+
+The current ClientInterfaceMock needs expansion to support all resource operations.
+
+#### FR-2.1: Generate Complete Mock Interface
+- Regenerate ClientInterfaceMock with all CRUD methods for all resource types
+- Add builder pattern helpers for common mock setups
+- Create mock response fixtures for typical API responses
+- Implement mock error scenarios for testing error handling
+
+#### FR-2.2: Mock Utilities
+- Create MockResponseBuilder for constructing API responses
+- Implement MockErrorBuilder for various error scenarios
+- Add mock state helpers for complex state transitions
+- Create mock validation helpers for input validation testing
+
+### FR-3: CI/CD Integration
+**Priority: High**
+
+#### FR-3.1: GitHub Actions Workflow
+Create new workflow: `.github/workflows/unit-tests.yml`
+
+Requirements:
+- Run on every push and PR
+- Execute in parallel with acceptance tests
+- Complete in < 2 minutes
+- Generate coverage reports
+- Upload coverage artifacts
+- Fail PR if coverage drops below threshold (70%)
+
+Workflow steps:
+1. Checkout code
+2. Setup Go environment
+3. Install dependencies
+4. Run unit tests with coverage
+5. Generate coverage report (HTML and XML)
+6. Upload coverage to artifact storage
+7. Comment coverage summary on PR
+8. Fail if coverage threshold not met
+
+#### FR-3.2: Pre-commit Hooks
+Create pre-commit configuration for local testing:
+- Run unit tests for changed files only
+- Validate schema definitions
+- Check for mock setup in new test files
+- Lint test code
+
+#### FR-3.3: Coverage Reporting
+Integrate coverage reporting tools:
+- Codecov or Coveralls integration
+- Coverage badge in README
+- Per-file coverage tracking
+- Historical coverage trending
+- Coverage diff on PRs
+
+### FR-4: Developer Documentation and Training
+**Priority: Medium**
+
+#### FR-4.1: Testing Standards Document
+Create comprehensive testing standards guide covering:
+- When to write unit tests vs acceptance tests
+- Required test coverage for new resources
+- Test naming conventions
+- Mock setup best practices
+- Test organization patterns
+- Common testing patterns and anti-patterns
+
+#### FR-4.2: Developer Quick Start Guide
+Create quick-start guide for developers:
+- Setting up local test environment
+- Running tests locally
+- Writing first unit test
+- Using test templates
+- Debugging test failures
+- Common gotchas and solutions
+
+#### FR-4.3: Video Tutorial
+Create video walkthrough demonstrating:
+- Framework overview
+- Writing tests for a new resource
+- Using all template types
+- Debugging techniques
+- Integration with IDE
+
+### FR-5: Test Utilities and Helpers
+**Priority: Medium**
+
+#### FR-5.1: Resource Factory Helpers
+Create test data factories for common resources:
+- AccountTestFactory
+- GatewayTestFactory
+- VPCTestFactory
+- FirewallTestFactory
+
+Each factory should provide:
+- Valid default configurations
+- Invalid configurations for negative testing
+- Edge case configurations
+- Randomized test data generation
+
+#### FR-5.2: Assertion Helpers
+Extend assertion helpers:
+- AssertSchemaMatchesOpenAPI (validate against API specs)
+- AssertValidationErrorContains
+- AssertStateEquals
+- AssertNoSensitiveDataInState
+
+#### FR-5.3: Mock Scenario Builders
+Create pre-configured mock scenarios:
+- SuccessfulCRUDScenario
+- NotFoundScenario
+- PermissionDeniedScenario
+- RateLimitScenario
+- NetworkErrorScenario
+- ValidationErrorScenario
+
+### FR-6: Advanced Testing Patterns
+**Priority: Low**
+
+#### FR-6.1: Property-Based Testing
+Implement property-based testing for:
+- Schema validation rules
+- String transformation functions
+- State diff calculations
+- Validation functions
+
+#### FR-6.2: Mutation Testing
+Set up mutation testing to verify test quality:
+- Use go-mutesting or similar tool
+- Run on critical validation functions
+- Track mutation score over time
+
+#### FR-6.3: Fuzzing
+Implement fuzzing for:
+- Input validation functions
+- String parsing functions
+- Configuration unmarshaling
+
+## Non-Functional Requirements
+
+### NFR-1: Performance
+- Unit tests must complete in < 2 minutes for full suite
+- Individual test files must run in < 1 second
+- No external API calls in unit tests
+- Parallelizable test execution
+- Minimal memory footprint
+
+### NFR-2: Maintainability
+- Test code follows same quality standards as production code
+- DRY principle applied using templates and helpers
+- Clear test organization and naming
+- Self-documenting test cases
+- Easy to update when resources change
+
+### NFR-3: Reliability
+- Tests are deterministic (no flaky tests)
+- No dependencies on external services
+- No time-based assertions that could fail
+- Proper test isolation
+- Clean state between tests
+
+### NFR-4: Developer Experience
+- Clear error messages on test failures
+- Easy to run tests locally
+- Fast feedback loop
+- Good IDE integration
+- Helpful documentation
+
+## Technical Specifications
+
+### Test Organization Structure
+```
+aviatrix/
+├── resource_unit_test_framework.go          # Core framework (existing)
+├── resource_unit_test_templates.go          # Templates (existing)
+├── resource_unit_test_helpers.go            # Additional helpers (new)
+├── resource_unit_test_factories.go          # Test data factories (new)
+├── resource_unit_test_assertions.go         # Custom assertions (new)
+├── resource_unit_test_scenarios.go          # Mock scenarios (new)
+├── resource_aviatrix_account_unit_test.go   # Account tests (expand existing)
+├── resource_aviatrix_gateway_unit_test.go   # Gateway tests (new)
+├── resource_aviatrix_vpc_unit_test.go       # VPC tests (new)
+├── resource_aviatrix_firewall_unit_test.go  # Firewall tests (new)
+└── ... (one test file per resource)
+```
+
+### Naming Conventions
+- Test files: `resource_aviatrix_<resource>_unit_test.go`
+- Test functions: `TestResource<Resource>_<Aspect>`
+- Sub-tests: Descriptive names in CamelCase
+- Mock setups: `setup<Resource><Operation>Mock`
+- Factories: `New<Resource>TestData`
+
+### Coverage Requirements by Resource Type
+- Core resources (gateway, vpc, transit): 90%+ coverage
+- Security resources (firewall, fqdn): 85%+ coverage
+- Account/auth resources: 90%+ coverage
+- Advanced features: 75%+ coverage
+- Edge/experimental resources: 60%+ coverage
+
+## Implementation Plan
+
+### Phase 1: Foundation (Week 1-2)
+- Regenerate complete ClientInterfaceMock
+- Create mock utilities and builders
+- Implement test data factories
+- Set up CI/CD pipeline for unit tests
+- Create coverage reporting
+
+### Phase 2: Core Resource Coverage (Week 3-4)
+- Implement tests for aviatrix_gateway
+- Implement tests for aviatrix_vpc
+- Implement tests for aviatrix_transit_gateway
+- Implement tests for aviatrix_spoke_gateway
+- Implement tests for aviatrix_site2cloud
+
+### Phase 3: Security Resource Coverage (Week 5-6)
+- Implement tests for aviatrix_firewall
+- Implement tests for aviatrix_firewall_instance
+- Implement tests for aviatrix_fqdn
+- Implement tests for distributed firewalling resources
+- Implement tests for segmentation resources
+
+### Phase 4: Remaining Resources (Week 7-8)
+- Implement tests for account/RBAC resources
+- Implement tests for AWS TGW resources
+- Implement tests for Azure peering resources
+- Implement tests for controller config resources
+- Implement tests for edge/experimental resources
+
+### Phase 5: Documentation and Training (Week 9-10)
+- Complete testing standards document
+- Create developer quick start guide
+- Record video tutorial
+- Create example test templates
+- Conduct team training sessions
+
+### Phase 6: Advanced Features (Week 11-12)
+- Implement property-based testing
+- Set up mutation testing
+- Implement fuzzing for critical functions
+- Performance optimization
+- Final documentation and handoff
+
+## Dependencies and Constraints
+
+### Dependencies
+- Go 1.23+ with testing package
+- Terraform Plugin SDK v2
+- testify/assert library
+- moq for mock generation
+- GitHub Actions for CI/CD
+- Coverage reporting tool (codecov/coveralls)
+
+### Constraints
+- Must maintain backward compatibility with existing tests
+- Cannot modify production code unless fixing bugs
+- Must not introduce external dependencies to production code
+- Test execution time must stay under 2 minutes
+- No credentials or sensitive data in test code
+
+## Risk Assessment
+
+### High Risk
+- **Mock regeneration breaking existing tests**
+  - Mitigation: Incremental regeneration, extensive validation
+
+- **CI/CD integration causing pipeline failures**
+  - Mitigation: Gradual rollout, feature flags, parallel testing
+
+### Medium Risk
+- **Coverage requirements too strict causing developer friction**
+  - Mitigation: Gradual threshold increases, exemption process
+
+- **Test maintenance burden for 100+ resources**
+  - Mitigation: Templates and automation, good documentation
+
+### Low Risk
+- **Performance degradation with full suite**
+  - Mitigation: Parallel execution, performance monitoring
+
+- **Flaky tests causing CI failures**
+  - Mitigation: Strict test isolation, no external dependencies
+
+## Acceptance Criteria
+
+### Must Have
+✅ All 20 core resources have comprehensive unit tests
+✅ Unit tests integrated into CI/CD with coverage reporting
+✅ Coverage > 70% for all new code
+✅ Developer documentation complete and published
+✅ Pre-commit hooks configured and tested
+✅ ClientInterfaceMock regenerated with all methods
+
+### Should Have
+✅ All security resources have unit tests
+✅ Test data factories for 10 most common resources
+✅ Video tutorial published
+✅ Coverage badge in README
+✅ Historical coverage tracking
+
+### Nice to Have
+✅ Property-based testing for validators
+✅ Mutation testing results
+✅ Fuzzing implemented for parsers
+✅ Automated test generation from schema
+
+## Metrics and Monitoring
+
+### Key Metrics
+- **Test Coverage**: Target 80%, minimum 70%
+- **Test Execution Time**: < 2 minutes for full suite
+- **Test Success Rate**: > 99% (allow for environmental issues)
+- **Coverage Trend**: Should not decrease between releases
+- **New Test Creation Rate**: 100% of new resources
+
+### Monitoring
+- Daily coverage reports
+- Weekly trend analysis
+- Monthly test performance review
+- Quarterly test quality assessment
+
+## Future Enhancements
+
+### Post-MVP Features
+1. AI-assisted test generation from resource schemas
+2. Visual test coverage dashboard
+3. Automated test maintenance tools
+4. Integration testing framework expansion
+5. Performance regression testing
+6. Cross-cloud compatibility test matrix
+
+## Glossary
+
+- **Unit Test**: Fast, isolated test with no external dependencies
+- **Acceptance Test**: Integration test requiring real infrastructure (TF_ACC=1)
+- **Mock**: Simulated object replacing real dependencies
+- **Coverage**: Percentage of code executed by tests
+- **CRUD**: Create, Read, Update, Delete operations
+- **Schema Validation**: Testing resource schema configuration
+- **Input Validation**: Testing user input validation functions
+- **State Management**: Testing Terraform state handling
+
+## References
+
+- Current Unit Test Framework: `aviatrix/UNIT_TEST_FRAMEWORK.md`
+- Terraform Plugin SDK v2: https://github.com/hashicorp/terraform-plugin-sdk
+- Go Testing Package: https://pkg.go.dev/testing
+- Testify Assert: https://github.com/stretchr/testify
