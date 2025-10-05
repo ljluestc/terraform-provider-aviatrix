@@ -36,17 +36,17 @@ func NewIntegrationTestFramework(t *testing.T, resourceType string, resource *sc
 
 // CRUDTestConfig defines configuration for CRUD operation testing
 type CRUDTestConfig struct {
-	ResourceName     string
-	PreCheck         func()
-	CreateConfig     string
-	UpdateConfig     string
+	ResourceName            string
+	PreCheck                func()
+	CreateConfig            string
+	UpdateConfig            string
 	ImportStateVerifyIgnore []string
-	CheckDestroy     resource.TestCheckFunc
-	CreateChecks     []resource.TestCheckFunc
-	UpdateChecks     []resource.TestCheckFunc
-	SkipImport       bool
-	SkipUpdate       bool
-	DependsOn        []string
+	CheckDestroy            resource.TestCheckFunc
+	CreateChecks            []resource.TestCheckFunc
+	UpdateChecks            []resource.TestCheckFunc
+	SkipImport              bool
+	SkipUpdate              bool
+	DependsOn               []string
 }
 
 // GenerateCRUDTest generates a complete CRUD test for a resource
@@ -468,4 +468,181 @@ func (b *TestConfigBuilder) AddDataSourceBlock(dataSourceType, name string, attr
 // Build returns the complete configuration
 func (b *TestConfigBuilder) Build() string {
 	return strings.Join(b.blocks, "\n")
+}
+
+// ResourceTestTemplate provides a template for resource testing
+type ResourceTestTemplate struct {
+	ResourceType      string
+	ResourceName      string
+	PreCheck          func(*testing.T)
+	ProviderFactories map[string]func() (*schema.Provider, error)
+	TestDataProvider  TestDataProvider
+	FixtureManager    *TestFixtureManager
+}
+
+// NewResourceTestTemplate creates a new resource test template
+func NewResourceTestTemplate(resourceType string) *ResourceTestTemplate {
+	return &ResourceTestTemplate{
+		ResourceType:      resourceType,
+		ResourceName:      "test",
+		TestDataProvider:  NewTestDataProvider(),
+		FixtureManager:    NewTestFixtureManager(),
+		ProviderFactories: GetTestProviderFactories(),
+	}
+}
+
+// WithPreCheck sets a custom pre-check function
+func (t *ResourceTestTemplate) WithPreCheck(preCheck func(*testing.T)) *ResourceTestTemplate {
+	t.PreCheck = preCheck
+	return t
+}
+
+// GenerateFullCRUDTest generates a complete CRUD test
+func (t *ResourceTestTemplate) GenerateFullCRUDTest(
+	createAttrs map[string]interface{},
+	updateAttrs map[string]interface{},
+	createChecks []resource.TestCheckFunc,
+	updateChecks []resource.TestCheckFunc,
+) func(*testing.T) {
+	return func(testCase *testing.T) {
+		if !IsAcceptanceTest() {
+			testCase.Skip("Skipping acceptance test (TF_ACC not set)")
+		}
+
+		resourceFullName := fmt.Sprintf("%s.%s", t.ResourceType, t.ResourceName)
+
+		configBuilder := NewTestConfigBuilder()
+		createConfig := configBuilder.AddResourceBlock(t.ResourceType, t.ResourceName, createAttrs).Build()
+
+		updateConfigBuilder := NewTestConfigBuilder()
+		updateConfig := updateConfigBuilder.AddResourceBlock(t.ResourceType, t.ResourceName, updateAttrs).Build()
+
+		resource.Test(testCase, resource.TestCase{
+			PreCheck:          func() { t.PreCheck(testCase) },
+			ProviderFactories: t.ProviderFactories,
+			Steps: []resource.TestStep{
+				{
+					Config: createConfig,
+					Check:  resource.ComposeTestCheckFunc(createChecks...),
+				},
+				{
+					ResourceName:      resourceFullName,
+					ImportState:       true,
+					ImportStateVerify: true,
+				},
+				{
+					Config: updateConfig,
+					Check:  resource.ComposeTestCheckFunc(updateChecks...),
+				},
+			},
+		})
+	}
+}
+
+// ParallelTestRunner executes multiple tests in parallel
+type ParallelTestRunner struct {
+	maxParallel int
+	tests       []func(*testing.T)
+}
+
+// NewParallelTestRunner creates a new parallel test runner
+func NewParallelTestRunner(maxParallel int) *ParallelTestRunner {
+	return &ParallelTestRunner{
+		maxParallel: maxParallel,
+		tests:       []func(*testing.T){},
+	}
+}
+
+// AddTest adds a test to the runner
+func (r *ParallelTestRunner) AddTest(test func(*testing.T)) {
+	r.tests = append(r.tests, test)
+}
+
+// Run executes all tests in parallel
+func (r *ParallelTestRunner) Run(t *testing.T) {
+	t.Parallel()
+
+	for i, test := range r.tests {
+		test := test // capture loop variable
+		testName := fmt.Sprintf("test-%d", i+1)
+
+		t.Run(testName, func(subT *testing.T) {
+			subT.Parallel()
+			test(subT)
+		})
+	}
+}
+
+// TestMetricsCollector collects test execution metrics
+type TestMetricsCollector struct {
+	testResults map[string]*TestResult
+}
+
+// TestResult represents the result of a test execution
+type TestResult struct {
+	TestName   string
+	Status     string
+	Duration   time.Duration
+	ErrorMsg   string
+	ResourceID string
+	StartTime  time.Time
+	EndTime    time.Time
+}
+
+// NewTestMetricsCollector creates a new metrics collector
+func NewTestMetricsCollector() *TestMetricsCollector {
+	return &TestMetricsCollector{
+		testResults: make(map[string]*TestResult),
+	}
+}
+
+// RecordTestStart records the start of a test
+func (c *TestMetricsCollector) RecordTestStart(testName string) {
+	c.testResults[testName] = &TestResult{
+		TestName:  testName,
+		StartTime: time.Now(),
+		Status:    "running",
+	}
+}
+
+// RecordTestEnd records the end of a test
+func (c *TestMetricsCollector) RecordTestEnd(testName string, err error) {
+	result := c.testResults[testName]
+	result.EndTime = time.Now()
+	result.Duration = result.EndTime.Sub(result.StartTime)
+
+	if err != nil {
+		result.Status = "failed"
+		result.ErrorMsg = err.Error()
+	} else {
+		result.Status = "passed"
+	}
+}
+
+// GetResults returns all test results
+func (c *TestMetricsCollector) GetResults() map[string]*TestResult {
+	return c.testResults
+}
+
+// GenerateReport generates a summary report
+func (c *TestMetricsCollector) GenerateReport() string {
+	var passed, failed int
+	var totalDuration time.Duration
+
+	for _, result := range c.testResults {
+		if result.Status == "passed" {
+			passed++
+		} else if result.Status == "failed" {
+			failed++
+		}
+		totalDuration += result.Duration
+	}
+
+	report := fmt.Sprintf("Test Results Summary:\n")
+	report += fmt.Sprintf("  Total: %d\n", passed+failed)
+	report += fmt.Sprintf("  Passed: %d\n", passed)
+	report += fmt.Sprintf("  Failed: %d\n", failed)
+	report += fmt.Sprintf("  Total Duration: %s\n", totalDuration)
+
+	return report
 }

@@ -1,0 +1,314 @@
+package aviatrix
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
+)
+
+// Example integration test demonstrating the framework usage
+// This file serves as a template for creating integration tests for all 282 resources
+
+// TestIntegrationFramework_AccountExample demonstrates complete CRUD testing
+func TestIntegrationFramework_AccountExample(t *testing.T) {
+	if !IsAcceptanceTest() {
+		t.Skip("Skipping acceptance test (TF_ACC not set)")
+	}
+
+	// Initialize the framework
+	framework := NewIntegrationTestFramework(t, "aviatrix_account", nil)
+	dataProvider := framework.testDataProvider
+
+	// Generate test data
+	accountName := dataProvider.GenerateAccountName("aws")
+	accountNumber := "123456789012" // Example AWS account
+	roleARN := fmt.Sprintf("arn:aws:iam::%s:role/aviatrix-role-app", accountNumber)
+
+	// Run CRUD test
+	framework.GenerateCRUDTest(CRUDTestConfig{
+		ResourceName:            "aviatrix_account.test",
+		PreCheck:                func() { PreCheckController(t) },
+		CreateConfig:            testAccAccountConfigAWSExample(accountName, accountNumber, roleARN),
+		UpdateConfig:            testAccAccountConfigAWSUpdateExample(accountName, accountNumber, roleARN),
+		ImportStateVerifyIgnore: []string{"aws_role_arn"},
+		CreateChecks: []resource.TestCheckFunc{
+			resource.TestCheckResourceAttr("aviatrix_account.test", "account_name", accountName),
+			resource.TestCheckResourceAttr("aviatrix_account.test", "cloud_type", "1"),
+			resource.TestCheckResourceAttrSet("aviatrix_account.test", "aws_account_number"),
+		},
+		UpdateChecks: []resource.TestCheckFunc{
+			resource.TestCheckResourceAttr("aviatrix_account.test", "account_name", accountName),
+			resource.TestCheckResourceAttr("aviatrix_account.test", "cloud_type", "1"),
+		},
+	})(t)
+}
+
+// TestIntegrationFramework_ErrorHandlingExample demonstrates error handling tests
+func TestIntegrationFramework_ErrorHandlingExample(t *testing.T) {
+	if !IsAcceptanceTest() {
+		t.Skip("Skipping acceptance test (TF_ACC not set)")
+	}
+
+	framework := NewIntegrationTestFramework(t, "aviatrix_account", nil)
+
+	framework.GenerateErrorHandlingTests([]ErrorHandlingTestConfig{
+		{
+			Name:              "invalid_cloud_type",
+			Config:            testAccAccountConfigInvalidCloudType(),
+			ExpectError:       true,
+			ErrorMessageMatch: "invalid cloud type",
+			PreCheck:          func() { PreCheckController(t) },
+		},
+		{
+			Name:              "missing_required_field",
+			Config:            testAccAccountConfigMissingField(),
+			ExpectError:       true,
+			ErrorMessageMatch: "required",
+			PreCheck:          func() { PreCheckController(t) },
+		},
+	})(t)
+}
+
+// TestIntegrationFramework_DependencyExample demonstrates dependency testing
+func TestIntegrationFramework_DependencyExample(t *testing.T) {
+	if !IsAcceptanceTest() {
+		t.Skip("Skipping acceptance test (TF_ACC not set)")
+	}
+
+	framework := NewIntegrationTestFramework(t, "aviatrix_spoke_gateway", nil)
+	dataProvider := framework.testDataProvider
+
+	accountName := dataProvider.GenerateAccountName("aws")
+	gatewayName := dataProvider.GenerateGatewayName()
+	vpcName := dataProvider.GenerateVPCName()
+
+	framework.GenerateDependencyTest(DependencyTestConfig{
+		ResourceName:     "aviatrix_spoke_gateway.test",
+		DependencyConfig: testAccAccountConfigAWSExample(accountName, "123456789012", "arn:aws:iam::123456789012:role/aviatrix-role-app"),
+		DependentConfig:  testAccSpokeGatewayConfig(gatewayName, vpcName, accountName),
+		Checks: []resource.TestCheckFunc{
+			resource.TestCheckResourceAttr("aviatrix_spoke_gateway.test", "gw_name", gatewayName),
+			resource.TestCheckResourceAttrSet("aviatrix_spoke_gateway.test", "vpc_id"),
+		},
+		PreCheck: func() { PreCheckController(t) },
+	})(t)
+}
+
+// TestIntegrationFramework_ImportExample demonstrates import testing
+func TestIntegrationFramework_ImportExample(t *testing.T) {
+	if !IsAcceptanceTest() {
+		t.Skip("Skipping acceptance test (TF_ACC not set)")
+	}
+
+	framework := NewIntegrationTestFramework(t, "aviatrix_account", nil)
+	dataProvider := framework.testDataProvider
+
+	accountName := dataProvider.GenerateAccountName("aws")
+
+	framework.GenerateImportTest(IntegrationImportTestConfig{
+		ResourceName:            "aviatrix_account.test",
+		Config:                  testAccAccountConfigAWSExample(accountName, "123456789012", "arn:aws:iam::123456789012:role/aviatrix-role-app"),
+		ImportStateVerifyIgnore: []string{"aws_role_arn"},
+		PreCheck:                func() { PreCheckController(t) },
+	})(t)
+}
+
+// TestResourceTestTemplate_Example demonstrates template-based testing
+func TestResourceTestTemplate_Example(t *testing.T) {
+	if !IsAcceptanceTest() {
+		t.Skip("Skipping acceptance test (TF_ACC not set)")
+	}
+
+	template := NewResourceTestTemplate("aviatrix_account").
+		WithPreCheck(PreCheckController)
+
+	dataProvider := template.TestDataProvider
+	accountName := dataProvider.GenerateAccountName("aws")
+
+	createAttrs := map[string]interface{}{
+		"account_name":       accountName,
+		"cloud_type":         1,
+		"aws_account_number": "123456789012",
+		"aws_iam":            true,
+		"aws_role_arn":       "arn:aws:iam::123456789012:role/aviatrix-role-app",
+	}
+
+	updateAttrs := map[string]interface{}{
+		"account_name":       accountName,
+		"cloud_type":         1,
+		"aws_account_number": "123456789012",
+		"aws_iam":            true,
+		"aws_role_arn":       "arn:aws:iam::123456789012:role/aviatrix-role-app-updated",
+	}
+
+	createChecks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr("aviatrix_account.test", "account_name", accountName),
+		resource.TestCheckResourceAttr("aviatrix_account.test", "cloud_type", "1"),
+	}
+
+	updateChecks := []resource.TestCheckFunc{
+		resource.TestCheckResourceAttr("aviatrix_account.test", "account_name", accountName),
+		resource.TestCheckResourceAttr("aviatrix_account.test", "cloud_type", "1"),
+	}
+
+	template.GenerateFullCRUDTest(createAttrs, updateAttrs, createChecks, updateChecks)(t)
+}
+
+// TestParallelTestRunner_Example demonstrates parallel test execution
+func TestParallelTestRunner_Example(t *testing.T) {
+	if !IsAcceptanceTest() {
+		t.Skip("Skipping acceptance test (TF_ACC not set)")
+	}
+
+	runner := NewParallelTestRunner(5)
+
+	// Add multiple independent tests
+	for i := 0; i < 3; i++ {
+		i := i // capture loop variable
+		runner.AddTest(func(subT *testing.T) {
+			framework := NewIntegrationTestFramework(subT, "aviatrix_account", nil)
+			dataProvider := framework.testDataProvider
+
+			accountName := dataProvider.GenerateAccountName(fmt.Sprintf("aws-%d", i))
+
+			framework.GenerateCRUDTest(CRUDTestConfig{
+				ResourceName: "aviatrix_account.test",
+				PreCheck:     func() { PreCheckController(subT) },
+				CreateConfig: testAccAccountConfigAWSExample(accountName, "123456789012", "arn:aws:iam::123456789012:role/aviatrix-role-app"),
+				CreateChecks: []resource.TestCheckFunc{
+					resource.TestCheckResourceAttr("aviatrix_account.test", "account_name", accountName),
+				},
+				SkipUpdate: true,
+			})(subT)
+		})
+	}
+
+	runner.Run(t)
+}
+
+// TestCheckFuncBuilder_Example demonstrates building complex check functions
+func TestCheckFuncBuilder_Example(t *testing.T) {
+	builder := NewTestCheckFuncBuilder()
+
+	builder.
+		AddResourceAttr("aviatrix_account.test", "account_name", "test-account").
+		AddResourceAttr("aviatrix_account.test", "cloud_type", "1").
+		AddResourceAttrSet("aviatrix_account.test", "aws_account_number").
+		AddCustomCheck(func(s *terraform.State) error {
+			// Custom validation logic
+			return nil
+		})
+
+	checkFunc := builder.Build()
+
+	// Use in test
+	_ = checkFunc
+}
+
+// TestFixtureManager_Example demonstrates fixture management
+func TestFixtureManager_Example(t *testing.T) {
+	manager := NewTestFixtureManager()
+
+	// Register account fixture
+	manager.RegisterFixture(&TestFixture{
+		Name:         "aws_account",
+		ResourceType: "aviatrix_account",
+		Config: `
+resource "aviatrix_account" "test_account" {
+  account_name       = "tf-test-account"
+  cloud_type         = 1
+  aws_account_number = "123456789012"
+  aws_iam            = true
+  aws_role_arn       = "arn:aws:iam::123456789012:role/aviatrix-role-app"
+}
+`,
+		Dependencies: []string{},
+	})
+
+	// Register gateway fixture that depends on account
+	manager.RegisterFixture(&TestFixture{
+		Name:         "spoke_gateway",
+		ResourceType: "aviatrix_spoke_gateway",
+		Config: `
+resource "aviatrix_spoke_gateway" "test" {
+  gw_name        = "tf-test-gateway"
+  vpc_id         = "vpc-123456"
+  cloud_type     = 1
+  account_name   = aviatrix_account.test_account.account_name
+  gw_size        = "t2.micro"
+  subnet         = "10.0.0.0/24"
+}
+`,
+		Dependencies: []string{"aws_account"},
+	})
+
+	// Build config with dependencies
+	config, err := manager.BuildConfigWithDependencies("spoke_gateway")
+	if err != nil {
+		t.Fatalf("Failed to build config: %v", err)
+	}
+
+	_ = config
+}
+
+// Helper functions for test configurations
+func testAccAccountConfigAWSExample(name, accountNumber, roleARN string) string {
+	return fmt.Sprintf(`
+resource "aviatrix_account" "test" {
+  account_name       = "%s"
+  cloud_type         = 1
+  aws_account_number = "%s"
+  aws_iam            = true
+  aws_role_arn       = "%s"
+}
+`, name, accountNumber, roleARN)
+}
+
+func testAccAccountConfigAWSUpdateExample(name, accountNumber, roleARN string) string {
+	return fmt.Sprintf(`
+resource "aviatrix_account" "test" {
+  account_name       = "%s"
+  cloud_type         = 1
+  aws_account_number = "%s"
+  aws_iam            = true
+  aws_role_arn       = "%s"
+  audit_account      = false
+}
+`, name, accountNumber, roleARN)
+}
+
+func testAccAccountConfigInvalidCloudType() string {
+	return `
+resource "aviatrix_account" "test" {
+  account_name       = "test-invalid"
+  cloud_type         = 999
+  aws_account_number = "123456789012"
+  aws_iam            = true
+  aws_role_arn       = "arn:aws:iam::123456789012:role/aviatrix-role-app"
+}
+`
+}
+
+func testAccAccountConfigMissingField() string {
+	return `
+resource "aviatrix_account" "test" {
+  account_name = "test-missing"
+  cloud_type   = 1
+}
+`
+}
+
+func testAccSpokeGatewayConfig(gwName, vpcName, accountName string) string {
+	return fmt.Sprintf(`
+resource "aviatrix_spoke_gateway" "test" {
+  gw_name      = "%s"
+  vpc_id       = "%s"
+  cloud_type   = 1
+  account_name = "%s"
+  gw_size      = "t2.micro"
+  subnet       = "10.0.0.0/24"
+}
+`, gwName, vpcName, accountName)
+}
