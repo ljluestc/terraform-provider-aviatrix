@@ -81,25 +81,33 @@ func (b *MockClientBuilder) Build() goaviatrix.ClientInterface {
 	return b.mock
 }
 
-// WithCreateFunc adds a create function to the mock
-func (b *MockClientBuilder) WithCreateFunc(fn func(interface{}) error) *MockClientBuilder {
-	// Mock clients will need specific type assertions in actual tests
-	// This is a generic pattern - implement specific methods as needed
+// WithGetAccountFunc configures the GetAccount mock function
+func (b *MockClientBuilder) WithGetAccountFunc(fn func(*goaviatrix.Account) (goaviatrix.Account, error)) *MockClientBuilder {
+	b.mock.GetAccountFunc = fn
 	return b
 }
 
-// WithGetFunc adds a get/read function to the mock
-func (b *MockClientBuilder) WithGetFunc(fn func(interface{}) (interface{}, error)) *MockClientBuilder {
+// WithCreateAccountFunc configures the CreateAccount mock function
+func (b *MockClientBuilder) WithCreateAccountFunc(fn func(*goaviatrix.Account) error) *MockClientBuilder {
+	b.mock.CreateAccountFunc = fn
 	return b
 }
 
-// WithUpdateFunc adds an update function to the mock
-func (b *MockClientBuilder) WithUpdateFunc(fn func(interface{}) error) *MockClientBuilder {
+// WithDeleteAccountFunc configures the DeleteAccount mock function
+func (b *MockClientBuilder) WithDeleteAccountFunc(fn func(*goaviatrix.Account) error) *MockClientBuilder {
+	b.mock.DeleteAccountFunc = fn
 	return b
 }
 
-// WithDeleteFunc adds a delete function to the mock
-func (b *MockClientBuilder) WithDeleteFunc(fn func(interface{}) error) *MockClientBuilder {
+// WithUpdateAccountFunc configures the UpdateAccount mock function
+func (b *MockClientBuilder) WithUpdateAccountFunc(fn func(*goaviatrix.Account) error) *MockClientBuilder {
+	b.mock.UpdateAccountFunc = fn
+	return b
+}
+
+// WithAuditAccountFunc configures the AuditAccount mock function
+func (b *MockClientBuilder) WithAuditAccountFunc(fn func(context.Context, *goaviatrix.Account) error) *MockClientBuilder {
+	b.mock.AuditAccountFunc = fn
 	return b
 }
 

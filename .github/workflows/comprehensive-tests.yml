@@ -1,0 +1,395 @@
+name: Comprehensive Test Suite
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'tests/**'
+      - '.github/workflows/comprehensive-tests.yml'
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Test type to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+          - e2e
+      cloud_provider:
+        description: 'Cloud provider (integration/e2e only)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - aws
+          - azure
+          - gcp
+          - oci
+
+env:
+  GO_VERSION: "1.23"
+  TERRAFORM_VERSION: "1.6.6"
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  # Determine what tests to run
+  test-matrix:
+    name: Determine Test Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      run_unit: ${{ steps.matrix.outputs.run_unit }}
+      run_integration: ${{ steps.matrix.outputs.run_integration }}
+      run_e2e: ${{ steps.matrix.outputs.run_e2e }}
+      providers: ${{ steps.matrix.outputs.providers }}
+    steps:
+      - id: matrix
+        run: |
+          TEST_TYPE="${{ github.event.inputs.test_type || 'all' }}"
+          PROVIDER="${{ github.event.inputs.cloud_provider || 'all' }}"
+
+          # Determine which test types to run
+          if [ "$TEST_TYPE" = "all" ] || [ "$TEST_TYPE" = "unit" ]; then
+            echo "run_unit=true" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$TEST_TYPE" = "all" ] || [ "$TEST_TYPE" = "integration" ]; then
+            echo "run_integration=true" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$TEST_TYPE" = "all" ] || [ "$TEST_TYPE" = "e2e" ]; then
+            echo "run_e2e=true" >> $GITHUB_OUTPUT
+          fi
+
+          # Determine cloud providers
+          if [ "$PROVIDER" = "all" ]; then
+            echo 'providers=["aws","azure","gcp","oci"]' >> $GITHUB_OUTPUT
+          else
+            echo "providers=[\"$PROVIDER\"]" >> $GITHUB_OUTPUT
+          fi
+
+  # Unit tests
+  unit-tests:
+    name: Unit Tests
+    needs: test-matrix
+    if: needs.test-matrix.outputs.run_unit == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ["1.23", "1.24"]
+      fail-fast: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+
+      - name: Install test tools
+        run: |
+          go install github.com/jstemmer/go-junit-report/v2@latest
+          go install github.com/axw/gocov/gocov@latest
+          go install github.com/AlekSi/gocov-xml@latest
+          go install gotest.tools/gotestsum@latest
+
+      - name: Create directories
+        run: mkdir -p test-results/unit
+
+      - name: Run unit tests
+        env:
+          TF_ACC: "0"
+        run: |
+          gotestsum --junitfile test-results/unit/junit.xml \
+            --format testname -- \
+            -race -coverprofile=test-results/unit/coverage.out \
+            -timeout=30m ./aviatrix/... ./tests/...
+
+      - name: Generate coverage reports
+        if: always()
+        run: |
+          go tool cover -html=test-results/unit/coverage.out -o test-results/unit/coverage.html
+          gocov convert test-results/unit/coverage.out | gocov-xml > test-results/unit/coverage.xml
+
+      - name: Upload unit test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results-go${{ matrix.go-version }}
+          path: test-results/unit/
+          retention-days: 30
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-results/unit/junit.xml
+          check_name: Unit Tests (Go ${{ matrix.go-version }})
+
+  # Integration tests
+  integration-tests:
+    name: Integration Tests - ${{ matrix.provider }}
+    needs: [test-matrix, unit-tests]
+    if: needs.test-matrix.outputs.run_integration == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: ${{ fromJson(needs.test-matrix.outputs.providers) }}
+    env:
+      TF_ACC: "1"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Create directories
+        run: mkdir -p test-results/integration
+
+      - name: Configure cloud credentials - AWS
+        if: matrix.provider == 'aws'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          echo "AWS credentials configured"
+          echo "SKIP_ACCOUNT_AZURE=yes" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_GCP=yes" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_OCI=yes" >> $GITHUB_ENV
+
+      - name: Configure cloud credentials - Azure
+        if: matrix.provider == 'azure'
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+        run: |
+          echo "Azure credentials configured"
+          echo "SKIP_ACCOUNT_AWS=yes" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_GCP=yes" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_OCI=yes" >> $GITHUB_ENV
+
+      - name: Configure cloud credentials - GCP
+        if: matrix.provider == 'gcp'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS" | base64 -d > gcp-credentials.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp-credentials.json" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_AWS=yes" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_AZURE=yes" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_OCI=yes" >> $GITHUB_ENV
+
+      - name: Configure cloud credentials - OCI
+        if: matrix.provider == 'oci'
+        env:
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+        run: |
+          echo "$OCI_PRIVATE_KEY" | base64 -d > oci-private-key.pem
+          chmod 600 oci-private-key.pem
+          echo "OCI_PRIVATE_KEY_PATH=$(pwd)/oci-private-key.pem" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_AWS=yes" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_AZURE=yes" >> $GITHUB_ENV
+          echo "SKIP_ACCOUNT_GCP=yes" >> $GITHUB_ENV
+
+      - name: Run integration tests
+        timeout-minutes: 60
+        env:
+          AVIATRIX_CONTROLLER_IP: ${{ secrets.AVIATRIX_CONTROLLER_IP }}
+          AVIATRIX_USERNAME: ${{ secrets.AVIATRIX_USERNAME }}
+          AVIATRIX_PASSWORD: ${{ secrets.AVIATRIX_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCOUNT_NUMBER: ${{ secrets.AWS_ACCOUNT_NUMBER }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          GOOGLE_PROJECT: ${{ secrets.GOOGLE_PROJECT }}
+          OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
+          OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+        run: |
+          go test -v -timeout=60m ./tests/integration/... \
+            2>&1 | tee test-results/integration/${{ matrix.provider }}.log
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results-${{ matrix.provider }}
+          path: test-results/integration/
+          retention-days: 30
+
+  # E2E tests
+  e2e-tests:
+    name: E2E Tests - Multi-Cloud
+    needs: [test-matrix, integration-tests]
+    if: needs.test-matrix.outputs.run_e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      TF_ACC: "1"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Create directories
+        run: mkdir -p test-results/e2e
+
+      - name: Configure all cloud credentials
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+          OCI_PRIVATE_KEY: ${{ secrets.OCI_PRIVATE_KEY }}
+        run: |
+          # GCP credentials
+          echo "$GOOGLE_APPLICATION_CREDENTIALS" | base64 -d > gcp-credentials.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$(pwd)/gcp-credentials.json" >> $GITHUB_ENV
+
+          # OCI private key
+          echo "$OCI_PRIVATE_KEY" | base64 -d > oci-private-key.pem
+          chmod 600 oci-private-key.pem
+          echo "OCI_PRIVATE_KEY_PATH=$(pwd)/oci-private-key.pem" >> $GITHUB_ENV
+
+      - name: Run E2E tests
+        timeout-minutes: 120
+        env:
+          AVIATRIX_CONTROLLER_IP: ${{ secrets.AVIATRIX_CONTROLLER_IP }}
+          AVIATRIX_USERNAME: ${{ secrets.AVIATRIX_USERNAME }}
+          AVIATRIX_PASSWORD: ${{ secrets.AVIATRIX_PASSWORD }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCOUNT_NUMBER: ${{ secrets.AWS_ACCOUNT_NUMBER }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          GOOGLE_PROJECT: ${{ secrets.GOOGLE_PROJECT }}
+          OCI_USER_ID: ${{ secrets.OCI_USER_ID }}
+          OCI_TENANCY_ID: ${{ secrets.OCI_TENANCY_ID }}
+          OCI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+          OCI_REGION: ${{ secrets.OCI_REGION }}
+        run: |
+          go test -v -timeout=120m ./tests/e2e/... \
+            2>&1 | tee test-results/e2e/multicloud.log
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: test-results/e2e/
+          retention-days: 30
+
+  # Test summary
+  test-summary:
+    name: Test Summary
+    needs: [unit-tests, integration-tests, e2e-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-test-results
+
+      - name: Generate summary
+        run: |
+          echo "# Comprehensive Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow Run**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Unit tests
+          echo "## Unit Tests" >> $GITHUB_STEP_SUMMARY
+          unit_count=$(find all-test-results -type d -name "unit-test-results-*" | wc -l)
+          echo "- **Configurations tested**: $unit_count" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Integration tests
+          echo "## Integration Tests" >> $GITHUB_STEP_SUMMARY
+          int_count=$(find all-test-results -type d -name "integration-test-results-*" | wc -l)
+          echo "- **Cloud providers tested**: $int_count" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # E2E tests
+          echo "## E2E Tests" >> $GITHUB_STEP_SUMMARY
+          if [ -d "all-test-results/e2e-test-results" ]; then
+            echo "- ✅ **E2E tests completed**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⊗ **E2E tests not run**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check for failures
+          if find all-test-results -name "*.log" -exec grep -l "FAIL\|FAILED" {} \; | grep -q .; then
+            echo "## ⚠️ Test Failures Detected" >> $GITHUB_STEP_SUMMARY
+            echo "Review individual job outputs for details." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ All Tests Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync(process.env.GITHUB_STEP_SUMMARY, 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });

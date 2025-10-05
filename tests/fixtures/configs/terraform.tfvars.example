@@ -1,0 +1,56 @@
+# Example Terraform Variables File
+# Copy this file to terraform.tfvars and fill in your actual values
+# DO NOT commit terraform.tfvars to version control!
+
+# General Configuration
+environment  = "test"
+project_name = "aviatrix-test"
+
+# Aviatrix Controller
+aviatrix_controller_ip = "controller.example.com"
+aviatrix_username      = "admin"
+aviatrix_password      = "your-secure-password"
+
+# AWS Configuration
+aws_region            = "us-east-1"
+aws_access_key_id     = "AKIAIOSFODNN7EXAMPLE"
+aws_secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+aws_account_number    = "123456789012"
+aws_vpc_cidr          = "10.0.0.0/16"
+
+# Azure Configuration
+arm_subscription_id = "12345678-1234-1234-1234-123456789012"
+arm_client_id       = "12345678-1234-1234-1234-123456789012"
+arm_client_secret   = "your-client-secret"
+arm_tenant_id       = "12345678-1234-1234-1234-123456789012"
+azure_region        = "East US"
+azure_resource_group = "aviatrix-test-rg"
+azure_vnet_cidr     = "10.1.0.0/16"
+
+# GCP Configuration
+gcp_project_id       = "your-gcp-project"
+gcp_region           = "us-central1"
+gcp_credentials_file = "/path/to/gcp-credentials.json"
+gcp_vpc_cidr         = "10.2.0.0/16"
+
+# OCI Configuration
+oci_tenancy_id       = "ocid1.tenancy.oc1..example"
+oci_user_id          = "ocid1.user.oc1..example"
+oci_fingerprint      = "aa:bb:cc:dd:ee:ff:gg:hh:ii:jj:kk:ll:mm:nn:oo:pp"
+oci_private_key_path = "/path/to/oci-private-key.pem"
+oci_region           = "us-ashburn-1"
+oci_vcn_cidr         = "10.3.0.0/16"
+
+# Gateway Configuration
+gateway_size = {
+  aws   = "t2.micro"
+  azure = "Standard_B1ms"
+  gcp   = "n1-standard-1"
+  oci   = "VM.Standard2.2"
+}
+
+enable_ha = false
+
+# Test Configuration
+test_duration       = 60
+cleanup_on_failure  = true

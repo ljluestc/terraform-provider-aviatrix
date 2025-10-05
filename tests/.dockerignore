@@ -1,0 +1,43 @@
+# Test artifacts
+test-results/
+test-artifacts/
+test-logs/
+*.log
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Coverage files
+*.out
+coverage.html
+coverage.xml
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Credentials (should never be in Docker context)
+gcp-credentials.json
+oci-private-key.pem
+.env
+*.pem
+*.key
+
+# Cache directories
+.cache/
+vendor/
+node_modules/

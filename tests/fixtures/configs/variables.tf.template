@@ -1,0 +1,210 @@
+# Variables Template for Multi-Cloud Testing
+
+# General Variables
+variable "environment" {
+  description = "Environment name (e.g., dev, test, staging)"
+  type        = string
+  default     = "test"
+}
+
+variable "project_name" {
+  description = "Project name for resource tagging"
+  type        = string
+  default     = "aviatrix-test"
+}
+
+# Aviatrix Controller Variables
+variable "aviatrix_controller_ip" {
+  description = "Aviatrix Controller IP address or hostname"
+  type        = string
+}
+
+variable "aviatrix_username" {
+  description = "Aviatrix Controller username"
+  type        = string
+  sensitive   = true
+}
+
+variable "aviatrix_password" {
+  description = "Aviatrix Controller password"
+  type        = string
+  sensitive   = true
+}
+
+# AWS Variables
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "aws_access_key_id" {
+  description = "AWS access key ID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "aws_secret_access_key" {
+  description = "AWS secret access key"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "aws_account_number" {
+  description = "AWS account number"
+  type        = string
+  default     = ""
+}
+
+variable "aws_vpc_cidr" {
+  description = "CIDR block for AWS VPC"
+  type        = string
+  default     = "10.0.0.0/16"
+}
+
+# Azure Variables
+variable "arm_subscription_id" {
+  description = "Azure subscription ID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "arm_client_id" {
+  description = "Azure client ID (application ID)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "arm_client_secret" {
+  description = "Azure client secret"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "arm_tenant_id" {
+  description = "Azure tenant ID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "azure_region" {
+  description = "Azure region for resources"
+  type        = string
+  default     = "East US"
+}
+
+variable "azure_resource_group" {
+  description = "Azure resource group name"
+  type        = string
+  default     = "aviatrix-test-rg"
+}
+
+variable "azure_vnet_cidr" {
+  description = "CIDR block for Azure VNet"
+  type        = string
+  default     = "10.1.0.0/16"
+}
+
+# GCP Variables
+variable "gcp_project_id" {
+  description = "GCP project ID"
+  type        = string
+  default     = ""
+}
+
+variable "gcp_region" {
+  description = "GCP region for resources"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "gcp_credentials_file" {
+  description = "Path to GCP service account credentials JSON file"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "gcp_vpc_cidr" {
+  description = "CIDR block for GCP VPC"
+  type        = string
+  default     = "10.2.0.0/16"
+}
+
+# OCI Variables
+variable "oci_tenancy_id" {
+  description = "OCI tenancy OCID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "oci_user_id" {
+  description = "OCI user OCID"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "oci_fingerprint" {
+  description = "OCI API key fingerprint"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "oci_private_key_path" {
+  description = "Path to OCI private key file"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "oci_region" {
+  description = "OCI region for resources"
+  type        = string
+  default     = "us-ashburn-1"
+}
+
+variable "oci_vcn_cidr" {
+  description = "CIDR block for OCI VCN"
+  type        = string
+  default     = "10.3.0.0/16"
+}
+
+# Gateway Configuration Variables
+variable "gateway_size" {
+  description = "Gateway instance size"
+  type        = map(string)
+  default = {
+    aws   = "t2.micro"
+    azure = "Standard_B1ms"
+    gcp   = "n1-standard-1"
+    oci   = "VM.Standard2.2"
+  }
+}
+
+variable "enable_ha" {
+  description = "Enable high availability for gateways"
+  type        = bool
+  default     = false
+}
+
+# Test Configuration
+variable "test_duration" {
+  description = "Maximum test duration in minutes"
+  type        = number
+  default     = 60
+}
+
+variable "cleanup_on_failure" {
+  description = "Cleanup resources on test failure"
+  type        = bool
+  default     = true
+}

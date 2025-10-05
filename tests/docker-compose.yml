@@ -1,0 +1,263 @@
+version: '3.8'
+
+# Docker Compose for Test Infrastructure
+# Provides isolated test environments for integration and E2E tests
+
+networks:
+  test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  test-results:
+  test-cache:
+  go-cache:
+
+services:
+  # Base test service with all dependencies
+  test-base:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: test
+    image: aviatrix-test:base
+    networks:
+      - test-network
+    volumes:
+      - ../:/app
+      - test-results:/app/test-results
+      - test-cache:/root/.cache
+      - go-cache:/go/pkg/mod
+    environment:
+      - CGO_ENABLED=0
+      - GO111MODULE=on
+      - GOPROXY=https://proxy.golang.org,direct
+
+  # Unit tests runner
+  unit-tests:
+    extends: test-base
+    command: >
+      sh -c "
+        echo '=== Running Unit Tests ===' &&
+        mkdir -p /app/test-results &&
+        go test -v -race -coverprofile=/app/test-results/coverage.out \
+          -timeout=30m ./aviatrix/... 2>&1 | tee /app/test-results/unit.log &&
+        echo '=== Unit Tests Complete ==='
+      "
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/test-results/unit.log"]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+
+  # Integration tests - AWS
+  integration-aws:
+    extends: test-base
+    environment:
+      - TF_ACC=1
+      - AVIATRIX_CONTROLLER_IP=${AVIATRIX_CONTROLLER_IP}
+      - AVIATRIX_USERNAME=${AVIATRIX_USERNAME}
+      - AVIATRIX_PASSWORD=${AVIATRIX_PASSWORD}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - AWS_ACCOUNT_NUMBER=${AWS_ACCOUNT_NUMBER}
+      - SKIP_ACCOUNT_AZURE=yes
+      - SKIP_ACCOUNT_GCP=yes
+      - SKIP_ACCOUNT_OCI=yes
+    command: >
+      sh -c "
+        echo '=== Running AWS Integration Tests ===' &&
+        mkdir -p /app/test-results/integration &&
+        go test -v -timeout=60m ./tests/integration/... \
+          -run TestAcc.*AWS.* 2>&1 | tee /app/test-results/integration/aws.log &&
+        echo '=== AWS Integration Tests Complete ==='
+      "
+    depends_on:
+      unit-tests:
+        condition: service_completed_successfully
+
+  # Integration tests - Azure
+  integration-azure:
+    extends: test-base
+    environment:
+      - TF_ACC=1
+      - AVIATRIX_CONTROLLER_IP=${AVIATRIX_CONTROLLER_IP}
+      - AVIATRIX_USERNAME=${AVIATRIX_USERNAME}
+      - AVIATRIX_PASSWORD=${AVIATRIX_PASSWORD}
+      - ARM_CLIENT_ID=${ARM_CLIENT_ID}
+      - ARM_CLIENT_SECRET=${ARM_CLIENT_SECRET}
+      - ARM_SUBSCRIPTION_ID=${ARM_SUBSCRIPTION_ID}
+      - ARM_TENANT_ID=${ARM_TENANT_ID}
+      - SKIP_ACCOUNT_AWS=yes
+      - SKIP_ACCOUNT_GCP=yes
+      - SKIP_ACCOUNT_OCI=yes
+    command: >
+      sh -c "
+        echo '=== Running Azure Integration Tests ===' &&
+        mkdir -p /app/test-results/integration &&
+        go test -v -timeout=60m ./tests/integration/... \
+          -run TestAcc.*Azure.* 2>&1 | tee /app/test-results/integration/azure.log &&
+        echo '=== Azure Integration Tests Complete ==='
+      "
+    depends_on:
+      unit-tests:
+        condition: service_completed_successfully
+
+  # Integration tests - GCP
+  integration-gcp:
+    extends: test-base
+    environment:
+      - TF_ACC=1
+      - AVIATRIX_CONTROLLER_IP=${AVIATRIX_CONTROLLER_IP}
+      - AVIATRIX_USERNAME=${AVIATRIX_USERNAME}
+      - AVIATRIX_PASSWORD=${AVIATRIX_PASSWORD}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-credentials.json
+      - GOOGLE_PROJECT=${GOOGLE_PROJECT}
+      - SKIP_ACCOUNT_AWS=yes
+      - SKIP_ACCOUNT_AZURE=yes
+      - SKIP_ACCOUNT_OCI=yes
+    volumes:
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-./gcp-credentials.json}:/app/gcp-credentials.json:ro
+    command: >
+      sh -c "
+        echo '=== Running GCP Integration Tests ===' &&
+        mkdir -p /app/test-results/integration &&
+        go test -v -timeout=60m ./tests/integration/... \
+          -run TestAcc.*GCP.* 2>&1 | tee /app/test-results/integration/gcp.log &&
+        echo '=== GCP Integration Tests Complete ==='
+      "
+    depends_on:
+      unit-tests:
+        condition: service_completed_successfully
+
+  # Integration tests - OCI
+  integration-oci:
+    extends: test-base
+    environment:
+      - TF_ACC=1
+      - AVIATRIX_CONTROLLER_IP=${AVIATRIX_CONTROLLER_IP}
+      - AVIATRIX_USERNAME=${AVIATRIX_USERNAME}
+      - AVIATRIX_PASSWORD=${AVIATRIX_PASSWORD}
+      - OCI_USER_ID=${OCI_USER_ID}
+      - OCI_TENANCY_ID=${OCI_TENANCY_ID}
+      - OCI_FINGERPRINT=${OCI_FINGERPRINT}
+      - OCI_PRIVATE_KEY_PATH=/app/oci-private-key.pem
+      - OCI_REGION=${OCI_REGION}
+      - SKIP_ACCOUNT_AWS=yes
+      - SKIP_ACCOUNT_AZURE=yes
+      - SKIP_ACCOUNT_GCP=yes
+    volumes:
+      - ${OCI_PRIVATE_KEY_PATH:-./oci-private-key.pem}:/app/oci-private-key.pem:ro
+    command: >
+      sh -c "
+        echo '=== Running OCI Integration Tests ===' &&
+        mkdir -p /app/test-results/integration &&
+        go test -v -timeout=60m ./tests/integration/... \
+          -run TestAcc.*OCI.* 2>&1 | tee /app/test-results/integration/oci.log &&
+        echo '=== OCI Integration Tests Complete ==='
+      "
+    depends_on:
+      unit-tests:
+        condition: service_completed_successfully
+
+  # E2E tests - Multi-cloud
+  e2e-multicloud:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: ci-test
+    networks:
+      - test-network
+    environment:
+      - TF_ACC=1
+      - AVIATRIX_CONTROLLER_IP=${AVIATRIX_CONTROLLER_IP}
+      - AVIATRIX_USERNAME=${AVIATRIX_USERNAME}
+      - AVIATRIX_PASSWORD=${AVIATRIX_PASSWORD}
+      # AWS
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - AWS_ACCOUNT_NUMBER=${AWS_ACCOUNT_NUMBER}
+      # Azure
+      - ARM_CLIENT_ID=${ARM_CLIENT_ID}
+      - ARM_CLIENT_SECRET=${ARM_CLIENT_SECRET}
+      - ARM_SUBSCRIPTION_ID=${ARM_SUBSCRIPTION_ID}
+      - ARM_TENANT_ID=${ARM_TENANT_ID}
+      # GCP
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/gcp-credentials.json
+      - GOOGLE_PROJECT=${GOOGLE_PROJECT}
+      # OCI
+      - OCI_USER_ID=${OCI_USER_ID}
+      - OCI_TENANCY_ID=${OCI_TENANCY_ID}
+      - OCI_FINGERPRINT=${OCI_FINGERPRINT}
+      - OCI_PRIVATE_KEY_PATH=/app/oci-private-key.pem
+      - OCI_REGION=${OCI_REGION}
+    volumes:
+      - ../:/app
+      - test-results:/app/test-results
+      - ${GOOGLE_APPLICATION_CREDENTIALS:-./gcp-credentials.json}:/app/gcp-credentials.json:ro
+      - ${OCI_PRIVATE_KEY_PATH:-./oci-private-key.pem}:/app/oci-private-key.pem:ro
+    command: >
+      sh -c "
+        echo '=== Running E2E Multi-Cloud Tests ===' &&
+        mkdir -p /app/test-results/e2e &&
+        go test -v -timeout=120m ./tests/e2e/... 2>&1 | \
+          tee /app/test-results/e2e/multicloud.log &&
+        echo '=== E2E Multi-Cloud Tests Complete ==='
+      "
+    depends_on:
+      - integration-aws
+      - integration-azure
+      - integration-gcp
+      - integration-oci
+
+  # Test report generator
+  test-report:
+    image: alpine:3.19
+    networks:
+      - test-network
+    volumes:
+      - test-results:/test-results
+    command: >
+      sh -c "
+        echo '=== Generating Test Report ===' &&
+        mkdir -p /test-results/summary &&
+        cat > /test-results/summary/index.html <<'EOF'
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Test Results Summary</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            .pass { color: green; }
+            .fail { color: red; }
+            .section { margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>Terraform Provider Aviatrix - Test Results</h1>
+          <div class='section'>
+            <h2>Test Execution Summary</h2>
+            <p>Generated: $(date)</p>
+          </div>
+        </body>
+        </html>
+        EOF
+        &&
+        echo 'Test report generated at /test-results/summary/index.html' &&
+        ls -lah /test-results/
+      "
+    depends_on:
+      - e2e-multicloud
+
+  # Development shell with all tools
+  dev-shell:
+    extends: test-base
+    stdin_open: true
+    tty: true
+    command: /bin/sh
+    environment:
+      - PS1=\[\033[01;32m\]aviatrix-test\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$
